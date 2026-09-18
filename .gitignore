@@ -29,3 +29,6 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# Gateway 本地登记配置
+/config/gateway.json

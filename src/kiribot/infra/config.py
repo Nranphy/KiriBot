@@ -1,5 +1,6 @@
 """加载应用配置"""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -26,3 +27,6 @@ class Settings(BaseSettings):
 
     playwright_timeout: float = Field(default=30, gt=0, le=300)
     """启动时无头浏览器检查的总超时秒数，必须大于零且不超过 300"""
+
+    gateway_config_path: Path = Path('config/gateway.json')
+    """Gateway JSON 配置路径，相对路径基于工作目录"""
