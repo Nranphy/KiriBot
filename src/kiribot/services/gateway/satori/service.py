@@ -10,6 +10,7 @@ from websockets.exceptions import WebSocketException
 
 from kiribot.models.gateway import GatewayConfig, SatoriForwardConfig
 from kiribot.services.gateway.models import GatewayProtocol, ProxyResponse
+from kiribot.services.gateway.observation import UserObservationSink
 from kiribot.services.gateway.registry import (
     ConnectionRegistry,
     ExternalSession,
@@ -32,11 +33,13 @@ class SatoriGateway:
         config: GatewayConfig,
         internal_token: str,
         timeout: float,
+        observation_sink: UserObservationSink | None,
     ) -> None:
         self.registry = registry
         self.config = config
         self.internal_token = internal_token
-        self.router = SatoriRouter(registry)
+        platforms = {name: config.platform for name, config in config.connections.items()}
+        self.router = SatoriRouter(registry, observation_sink, platforms)
         self.api = SatoriApiClient(timeout)
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.started = False

@@ -9,6 +9,7 @@ from loguru import logger
 from nonebot.adapters.onebot.v11 import Adapter as OneBotAdapter
 from nonebot.adapters.satori import Adapter as SatoriAdapter
 
+from kiribot.clients.database import get_database_client
 from kiribot.controller.admin import router as admin_router
 from kiribot.controller.gateway import router as gateway_router
 from kiribot.controller.loader import load_controllers
@@ -17,6 +18,7 @@ from kiribot.infra.log import configure_logging
 from kiribot.infra.playwright import check_playwright
 from kiribot.services.gateway import GatewayService, get_gateway_service
 from kiribot.services.instances import InstanceService, get_instance_service
+from kiribot.services.users import UserRecorder, get_user_recorder
 
 
 def initialize_nonebot(settings: Settings, gateway: GatewayService) -> FastAPI:
@@ -62,6 +64,7 @@ def initialize_fastapi(
     bot_app: FastAPI,
     gateway: GatewayService,
     instances: InstanceService,
+    user_recorder: UserRecorder,
 ) -> FastAPI:
     """初始化 FastAPI，并装配浏览器检查与 Bot 生命周期"""
 
@@ -70,6 +73,9 @@ def initialize_fastapi(
         configure_logging(settings.log_level)
         logger.info("正在检查 Playwright 无头浏览器")
         await check_playwright(settings.playwright_timeout)
+        database = get_database_client()
+        await database.start()
+        await user_recorder.start()
         logger.info("启动检查通过，Manager 已就绪")
         try:
             await gateway.start()
@@ -79,6 +85,8 @@ def initialize_fastapi(
         finally:
             await instances.close()
             await gateway.close()
+            await user_recorder.close()
+            await database.close()
             logger.info("Manager 已关闭")
 
     return FastAPI(
@@ -96,9 +104,10 @@ def create_app() -> FastAPI:
     configure_logging(settings.log_level)
     gateway = get_gateway_service()
     instances = get_instance_service()
+    user_recorder = get_user_recorder()
     bot_app = initialize_nonebot(settings, gateway)
     load_controllers()
-    app = initialize_fastapi(settings, bot_app, gateway, instances)
+    app = initialize_fastapi(settings, bot_app, gateway, instances, user_recorder)
     app.include_router(admin_router)
     app.include_router(gateway_router)
     app.mount('/manager', bot_app)

@@ -1,7 +1,6 @@
 """Gateway 外部服务登记配置"""
 
 import re
-from enum import StrEnum
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
@@ -15,6 +14,8 @@ from pydantic import (
     model_validator,
 )
 
+from kiribot.models.users import ChatPlatform
+
 
 def validate_absolute_url(value: object, schemes: set[str], name: str) -> object:
     """在 Pydantic 归一化前校验 URL 的绝对地址结构"""
@@ -24,12 +25,6 @@ def validate_absolute_url(value: object, schemes: set[str], name: str) -> object
     if value != value.strip() or parsed.scheme not in schemes or not parsed.netloc:
         raise ValueError(f'{name} 必须是包含主机的绝对地址')
     return value
-
-
-class ChatPlatform(StrEnum):
-    """Gateway 当前允许登记的聊天平台"""
-
-    QQ = 'qq'
 
 
 class OneBot11ForwardConfig(BaseModel):

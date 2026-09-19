@@ -13,6 +13,7 @@ from kiribot.models.gateway import (
     OneBot11ReverseConfig,
 )
 from kiribot.services.gateway.models import GatewayProtocol
+from kiribot.services.gateway.observation import UserObservationSink
 from kiribot.services.gateway.onebot11.router import OneBot11Router
 from kiribot.services.gateway.onebot11.session import (
     OneBot11ForwardSession,
@@ -35,11 +36,13 @@ class OneBot11Gateway:
         config: GatewayConfig,
         internal_token: str,
         timeout: float,
+        observation_sink: UserObservationSink | None,
     ) -> None:
         self.registry = registry
         self.config = config
         self.internal_token = internal_token
-        self.router = OneBot11Router(registry, timeout)
+        platforms = {name: config.platform for name, config in config.connections.items()}
+        self.router = OneBot11Router(registry, timeout, observation_sink, platforms)
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.started = False
 

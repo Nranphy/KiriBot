@@ -6,15 +6,26 @@ from uuid import uuid4
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import WebSocketException
 
+from kiribot.models.users import ChatPlatform
 from kiribot.services.gateway.models import GatewayProtocol
+from kiribot.services.gateway.observation import UserObservationSink
+from kiribot.services.gateway.onebot11.extractor import extract_user_observation
 from kiribot.services.gateway.registry import ConnectionRegistry
 from kiribot.services.gateway.transport import Connection
 
 
 class OneBot11Router:
-    def __init__(self, registry: ConnectionRegistry, timeout: float) -> None:
+    def __init__(
+        self,
+        registry: ConnectionRegistry,
+        timeout: float,
+        observation_sink: UserObservationSink | None,
+        platforms: dict[str, ChatPlatform],
+    ) -> None:
         self.registry = registry
         self.timeout = timeout
+        self.observation_sink = observation_sink
+        self.platforms = platforms
         self.tasks: set[asyncio.Task[None]] = set()
         self.pending: dict[str, tuple[str, asyncio.Future[dict]]] = {}
 
@@ -24,6 +35,12 @@ class OneBot11Router:
                 raise ValueError('事件 self_id 与连接账号不一致')
             if payload['post_type'] == 'meta_event':
                 return
+            observation = extract_user_observation(
+                payload,
+                self.platforms[connection_name],
+            )
+            if observation is not None and self.observation_sink is not None:
+                self.observation_sink.submit(observation)
             for subscriber in self.registry.get_subscribers(connection_name, GatewayProtocol.ONEBOT_V11):
                 if not subscriber.publish(payload):
                     await subscriber.close(code=1013)

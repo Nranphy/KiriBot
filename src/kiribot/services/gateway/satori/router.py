@@ -2,14 +2,24 @@
 
 import asyncio
 
+from kiribot.models.users import ChatPlatform
 from kiribot.services.gateway.models import GatewayProtocol
+from kiribot.services.gateway.observation import UserObservationSink
 from kiribot.services.gateway.registry import ConnectionRegistry
+from kiribot.services.gateway.satori.extractor import extract_user_observation
 from kiribot.services.gateway.satori.session import SatoriExternalSession
 
 
 class SatoriRouter:
-    def __init__(self, registry: ConnectionRegistry) -> None:
+    def __init__(
+        self,
+        registry: ConnectionRegistry,
+        observation_sink: UserObservationSink | None,
+        platforms: dict[str, ChatPlatform],
+    ) -> None:
         self.registry = registry
+        self.observation_sink = observation_sink
+        self.platforms = platforms
         self.pongs: dict[str, asyncio.Event] = {}
 
     async def route(self, connection_name: str, payload: dict) -> None:
@@ -27,6 +37,12 @@ class SatoriRouter:
             sequence = body.get('sn', body.get('id'))
             if isinstance(sequence, int):
                 connection.sequence = sequence
+            observation = extract_user_observation(
+                body,
+                self.platforms[connection.connection_name],
+            )
+            if observation is not None and self.observation_sink is not None:
+                self.observation_sink.submit(observation)
             await self.route(connection.connection_name, payload)
         elif opcode == 2:
             self.pongs.setdefault(connection.connection_name, asyncio.Event()).set()

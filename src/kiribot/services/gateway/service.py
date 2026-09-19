@@ -7,6 +7,7 @@ from fastapi import WebSocket
 
 from kiribot.models.gateway import GatewayConfig
 from kiribot.services.gateway.models import ConnectionState, ProxyResponse
+from kiribot.services.gateway.observation import UserObservationSink
 from kiribot.services.gateway.onebot11 import OneBot11Gateway
 from kiribot.services.gateway.registry import ConnectionRegistry
 from kiribot.services.gateway.satori import SatoriGateway
@@ -15,22 +16,43 @@ from kiribot.services.gateway.satori import SatoriGateway
 class GatewayService:
     """装配共享注册表并协调 OneBot、Satori 协议服务"""
 
-    def __init__(self, config: GatewayConfig | None = None, request_timeout: float = 30) -> None:
+    def __init__(
+        self,
+        config: GatewayConfig | None = None,
+        request_timeout: float = 30,
+        observation_sink: UserObservationSink | None = None,
+    ) -> None:
         self.config = config if config is not None else GatewayConfig()
         self.internal_token = secrets.token_urlsafe(32)
         self.registry = ConnectionRegistry()
-        self.onebot11 = OneBot11Gateway(self.registry, self.config, self.internal_token, request_timeout)
-        self.satori = SatoriGateway(self.registry, self.config, self.internal_token, request_timeout)
+        self.onebot11 = OneBot11Gateway(
+            self.registry,
+            self.config,
+            self.internal_token,
+            request_timeout,
+            observation_sink,
+        )
+        self.satori = SatoriGateway(
+            self.registry,
+            self.config,
+            self.internal_token,
+            request_timeout,
+            observation_sink,
+        )
 
     @classmethod
-    def from_config_file(cls, path: Path) -> GatewayService:
+    def from_config_file(
+        cls,
+        path: Path,
+        observation_sink: UserObservationSink | None = None,
+    ) -> GatewayService:
         try:
             content = path.read_text(encoding='utf-8')
         except FileNotFoundError:
             config = GatewayConfig()
         else:
             config = GatewayConfig.model_validate_json(content)
-        return cls(config)
+        return cls(config, observation_sink=observation_sink)
 
     @property
     def connection_states(self) -> dict[str, ConnectionState]:
