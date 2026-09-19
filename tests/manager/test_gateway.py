@@ -27,11 +27,13 @@ def create_client(token: str | None = None) -> TestClient:
                 "napcat-1": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
+                    "platform": "qq",
                     "token": token,
                 },
                 "napcat-2": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
+                    "platform": "qq",
                     "token": token,
                 },
             }
@@ -127,6 +129,7 @@ def test_forward_config_rejects_reverse_external_endpoint() -> None:
                 "napcat": {
                     "protocol": "onebot_v11",
                     "mode": "forward",
+                    "platform": "qq",
                     "url": "ws://127.0.0.1:3001/",
                 }
             }
@@ -161,12 +164,30 @@ def test_config_discriminates_protocol_fields() -> None:
             }
         )
 
+    for connection in (
+        {"protocol": "onebot_v11", "mode": "reverse"},
+        {"protocol": "satori", "url": "http://127.0.0.1:5500"},
+        {
+            "protocol": "onebot_v11",
+            "mode": "reverse",
+            "platform": "discord",
+        },
+        {
+            "protocol": "satori",
+            "platform": "discord",
+            "url": "http://127.0.0.1:5500",
+        },
+    ):
+        with pytest.raises(ValidationError):
+            GatewayConfig.model_validate({"connections": {"bad": connection}})
+
     forward = GatewayConfig.model_validate(
         {
             "connections": {
                 "napcat": {
                     "protocol": "onebot_v11",
                     "mode": "forward",
+                    "platform": "qq",
                     "url": "ws://127.0.0.1:3001/",
                 }
             }
@@ -181,6 +202,7 @@ def test_config_discriminates_protocol_fields() -> None:
                         "napcat": {
                             "protocol": "onebot_v11",
                             "mode": "forward",
+                            "platform": "qq",
                             "url": invalid_url,
                         }
                     }
@@ -231,6 +253,7 @@ async def test_forward_connection_reconnects_and_uses_bearer_token() -> None:
                     "napcat": {
                         "protocol": "onebot_v11",
                         "mode": "forward",
+                        "platform": "qq",
                         "url": f"ws://127.0.0.1:{port}/",
                         "token": "secret",
                     }

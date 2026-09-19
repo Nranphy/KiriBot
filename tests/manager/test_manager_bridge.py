@@ -27,6 +27,7 @@ async def test_manager_uses_standard_internal_connection(
                     "napcat-1": {
                         "protocol": "onebot_v11",
                         "mode": "reverse",
+                        "platform": "qq",
                     }
                 }
             }

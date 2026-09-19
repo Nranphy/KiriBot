@@ -1,6 +1,7 @@
 """Gateway 外部服务登记配置"""
 
 import re
+from enum import StrEnum
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
@@ -25,12 +26,19 @@ def validate_absolute_url(value: object, schemes: set[str], name: str) -> object
     return value
 
 
+class ChatPlatform(StrEnum):
+    """Gateway 当前允许登记的聊天平台"""
+
+    QQ = 'qq'
+
+
 class OneBot11ForwardConfig(BaseModel):
     """OneBot 11 Universal 正向连接配置"""
 
     model_config = ConfigDict(extra='forbid')
     protocol: Literal['onebot_v11']
     mode: Literal['forward']
+    platform: ChatPlatform
     url: AnyWebsocketUrl
     token: str | None = Field(default=None, repr=False)
     self_id: str | None = Field(default=None, min_length=1)
@@ -47,6 +55,7 @@ class OneBot11ReverseConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
     protocol: Literal['onebot_v11']
     mode: Literal['reverse']
+    platform: ChatPlatform
     token: str | None = Field(default=None, repr=False)
     self_id: str | None = Field(default=None, min_length=1)
 
@@ -63,6 +72,7 @@ class SatoriForwardConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
     protocol: Literal['satori']
     mode: Literal['forward'] = 'forward'
+    platform: ChatPlatform
     url: AnyHttpUrl | AnyWebsocketUrl
     token: str | None = Field(default=None, repr=False)
 

@@ -21,6 +21,13 @@ def test_environment_overrides_dotenv(
     assert Settings().port == 8124
 
 
+def test_database_url_can_be_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    database_url = "sqlite+aiosqlite:///custom/kiribot.db"
+    monkeypatch.setenv("KIRIBOT_DATABASE_URL", database_url)
+
+    assert Settings().database_url == database_url
+
+
 def test_health_and_only_route(monkeypatch: pytest.MonkeyPatch) -> None:
     check = AsyncMock()
     monkeypatch.setattr("kiribot.controller.app.check_playwright", check)

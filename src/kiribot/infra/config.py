@@ -29,10 +29,17 @@ class Settings(BaseSettings):
     playwright_timeout: float = Field(default=30, gt=0, le=300)
     """启动时无头浏览器检查的总超时秒数，必须大于零且不超过 300"""
 
-    gateway_config_path: Path = Path('config/gateway.json')
+    gateway_config_path: Path = Path("config/gateway.json")
     """Gateway JSON 配置路径，相对路径基于工作目录"""
 
-    instances_config_path: Path = Path('config/instances.json')
+    database_url: str = Field(
+        default="sqlite+aiosqlite:///data/kiribot.db",
+        min_length=1,
+        repr=False,
+    )
+    """SQLAlchemy 异步数据库连接 URL，当前仅支持 SQLite"""
+
+    instances_config_path: Path = Path("config/instances.json")
     """Worker 实例 JSON 配置路径，相对路径基于工作目录"""
 
 

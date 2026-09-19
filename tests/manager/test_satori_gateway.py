@@ -23,6 +23,7 @@ def create_client(online: bool = True) -> tuple[TestClient, GatewayService]:
             "connections": {
                 "chronocat": {
                     "protocol": "satori",
+                    "platform": "qq",
                     "url": "http://127.0.0.1:5500",
                     "token": "secret",
                 }
@@ -119,5 +120,13 @@ def test_satori_urls() -> None:
 def test_satori_config_rejects_invalid_service_url(url: str) -> None:
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate(
-            {"connections": {"chronocat": {"protocol": "satori", "url": url}}}
+            {
+                "connections": {
+                    "chronocat": {
+                        "protocol": "satori",
+                        "platform": "qq",
+                        "url": url,
+                    }
+                }
+            }
         )

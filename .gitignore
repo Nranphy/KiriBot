@@ -34,5 +34,8 @@ Thumbs.db
 /config/gateway.json
 /config/instances.json
 
+# 本地持久化数据
+/data/
+
 # 本地临时文件
 /temp/

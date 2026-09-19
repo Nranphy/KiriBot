@@ -67,6 +67,7 @@ def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
                 "napcat-1": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
+                    "platform": "qq",
                 }
             }
         }
