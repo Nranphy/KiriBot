@@ -15,6 +15,7 @@ from kiribot.services.instances import (
     InstanceAlreadyRunningError,
     InstanceNotRunningError,
     InstanceService,
+    get_instance_service,
 )
 
 
@@ -126,6 +127,29 @@ async def test_close_stops_managed_workers(tmp_path: Path) -> None:
     assert not service.get("echo-worker").running
 
 
+@pytest.mark.asyncio
+async def test_restart_running_worker(tmp_path: Path) -> None:
+    service, process_client = create_service(tmp_path)
+    await service.start("echo-worker")
+
+    status = await service.restart("echo-worker")
+
+    assert status.running
+    assert process_client.start_mock.await_count == 2
+    process_client.stop_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_restart_rejects_stopped_worker(tmp_path: Path) -> None:
+    service, process_client = create_service(tmp_path)
+
+    with pytest.raises(InstanceNotRunningError):
+        await service.restart("echo-worker")
+
+    process_client.start_mock.assert_not_awaited()
+    process_client.stop_mock.assert_not_awaited()
+
+
 def test_instance_management_routes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -144,3 +168,29 @@ def test_instance_management_routes(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Worker 实例不存在"}
+
+
+def test_instance_status_and_lifecycle_routes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    service, process_client = create_service(tmp_path)
+    app = create_app()
+    app.dependency_overrides[get_instance_service] = lambda: service
+
+    with TestClient(app) as client:
+        stopped = client.get("/instances/echo-worker")
+        started = client.post("/instances/echo-worker/start")
+        restarted = client.post("/instances/echo-worker/restart")
+        stopped_again = client.post("/instances/echo-worker/stop")
+        restart_stopped = client.post("/instances/echo-worker/restart")
+
+    assert stopped.status_code == 200
+    assert not stopped.json()["running"]
+    assert started.json()["running"]
+    assert restarted.json()["running"]
+    assert not stopped_again.json()["running"]
+    assert restart_stopped.status_code == 409
+    assert restart_stopped.json() == {"detail": "Worker 实例未运行"}
+    assert process_client.start_mock.await_count == 2
