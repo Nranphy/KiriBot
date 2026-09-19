@@ -1,0 +1,30 @@
+[project]
+name = "kiribot-worker-nonebot2"
+version = "0.1.0"
+description = "KiriBot 的 NoneBot2 Worker 模板"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "nonebot-adapter-onebot>=2.4.6",
+    "nonebot-plugin-alconna>=0.62.1",
+    "nonebot2[fastapi,httpx,websockets]>=2.5.0",
+    "pydantic-settings>=2.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.16.7",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+extraPaths = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
