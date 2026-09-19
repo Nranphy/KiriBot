@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from kiribot.clients.process import ProcessClient
 from kiribot.controller.app import create_app
-from kiribot.infra.config import Settings
 from kiribot.models.gateway import GatewayConfig
 from kiribot.models.instances import InstancesConfig
 from kiribot.services.instances import (
@@ -130,12 +129,14 @@ def test_instance_management_routes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
-    settings = Settings(
-        gateway_config_path=tmp_path / "missing-gateway.json",
-        instances_config_path=tmp_path / "missing-instances.json",
+    monkeypatch.setenv(
+        "KIRIBOT_GATEWAY_CONFIG_PATH", str(tmp_path / "missing-gateway.json")
+    )
+    monkeypatch.setenv(
+        "KIRIBOT_INSTANCES_CONFIG_PATH", str(tmp_path / "missing-instances.json")
     )
 
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app()) as client:
         assert client.get("/instances").json() == []
         response = client.post("/instances/missing/start")
 

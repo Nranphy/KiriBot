@@ -24,7 +24,7 @@ def test_environment_overrides_dotenv(
 def test_health_and_only_route(monkeypatch: pytest.MonkeyPatch) -> None:
     check = AsyncMock()
     monkeypatch.setattr("kiribot.controller.app.check_playwright", check)
-    app = create_app(Settings())
+    app = create_app()
     with TestClient(app) as client:
         assert client.get("/health").json() == {
             "status": "ok",
@@ -41,6 +41,6 @@ def test_browser_failure_blocks_startup(monkeypatch: pytest.MonkeyPatch) -> None
     )
     with (
         pytest.raises(RuntimeError, match="browser unavailable"),
-        TestClient(create_app(Settings())),
+        TestClient(create_app()),
     ):
         pass

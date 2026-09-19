@@ -11,8 +11,7 @@ import uvicorn
 from websockets.asyncio.client import connect
 
 from kiribot.controller.app import create_app
-from kiribot.infra.config import Settings
-from kiribot.services.gateway import GatewayService
+from kiribot.services.gateway import GatewayService, get_gateway_service
 from kiribot.services.gateway.models import SubscriberKey
 
 
@@ -37,8 +36,10 @@ async def test_manager_uses_standard_internal_connection(
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
-    app = create_app(Settings(port=port, gateway_config_path=config))
-    gateway: GatewayService = app.state.gateway
+    monkeypatch.setenv("KIRIBOT_PORT", str(port))
+    monkeypatch.setenv("KIRIBOT_GATEWAY_CONFIG_PATH", str(config))
+    app = create_app()
+    gateway: GatewayService = get_gateway_service()
     server = uvicorn.Server(uvicorn.Config(app, log_config=None))
     task = asyncio.create_task(server.serve(sockets=[listener]))
     try:

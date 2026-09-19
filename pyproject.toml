@@ -35,7 +35,11 @@ venvPath = "."
 venv = ".venv"
 pythonVersion = "3.14"
 extraPaths = ["src"]
+exclude = ["workers"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+exclude = ["workers"]

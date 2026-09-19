@@ -1,5 +1,6 @@
 """加载应用配置"""
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -30,3 +31,12 @@ class Settings(BaseSettings):
 
     gateway_config_path: Path = Path('config/gateway.json')
     """Gateway JSON 配置路径，相对路径基于工作目录"""
+
+    instances_config_path: Path = Path('config/instances.json')
+    """Worker 实例 JSON 配置路径，相对路径基于工作目录"""
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """返回当前 Manager 进程共享的配置"""
+    return Settings()

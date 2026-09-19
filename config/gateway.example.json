@@ -1,0 +1,8 @@
+{
+  "connections": {
+    "napcat-1": {
+      "protocol": "onebot_v11",
+      "mode": "reverse"
+    }
+  }
+}

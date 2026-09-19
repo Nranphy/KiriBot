@@ -30,5 +30,6 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Gateway 本地登记配置
+# 本地配置文件
 /config/gateway.json
+/config/instances.json

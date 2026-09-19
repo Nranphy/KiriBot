@@ -13,7 +13,7 @@ from websockets.asyncio.server import ServerConnection, serve
 
 from kiribot.controller.gateway import router
 from kiribot.models.gateway import GatewayConfig
-from kiribot.services.gateway import GatewayService
+from kiribot.services.gateway import GatewayService, get_gateway_service
 from kiribot.services.gateway.models import ConnectionState, GatewayProtocol
 from kiribot.services.gateway.onebot11.session import OneBot11ForwardSession
 
@@ -38,7 +38,9 @@ def create_client(token: str | None = None) -> TestClient:
         }
     )
     app = FastAPI()
-    app.state.gateway = GatewayService(config, request_timeout=0.1)
+    gateway = GatewayService(config, request_timeout=0.1)
+    app.state.gateway = gateway
+    app.dependency_overrides[get_gateway_service] = lambda: gateway
     app.include_router(router)
     return TestClient(app)
 
@@ -131,7 +133,9 @@ def test_forward_config_rejects_reverse_external_endpoint() -> None:
         }
     )
     app = FastAPI()
-    app.state.gateway = GatewayService(config)
+    gateway = GatewayService(config)
+    app.state.gateway = gateway
+    app.dependency_overrides[get_gateway_service] = lambda: gateway
     app.include_router(router)
     with (
         TestClient(app) as client,

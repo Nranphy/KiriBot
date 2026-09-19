@@ -9,13 +9,14 @@ from loguru import logger
 from nonebot.adapters.onebot.v11 import Adapter as OneBotAdapter
 from nonebot.adapters.satori import Adapter as SatoriAdapter
 
-from kiribot.controller.admin import initialize_admin_controllers
 from kiribot.controller.admin import router as admin_router
 from kiribot.controller.gateway import router as gateway_router
-from kiribot.infra.config import Settings
+from kiribot.controller.loader import load_controllers
+from kiribot.infra.config import Settings, get_settings
 from kiribot.infra.log import configure_logging
 from kiribot.infra.playwright import check_playwright
-from kiribot.services.gateway import GatewayService
+from kiribot.services.gateway import GatewayService, get_gateway_service
+from kiribot.services.instances import InstanceService, get_instance_service
 
 
 def initialize_nonebot(settings: Settings, gateway: GatewayService) -> FastAPI:
@@ -56,7 +57,12 @@ def initialize_nonebot(settings: Settings, gateway: GatewayService) -> FastAPI:
     return bot_app
 
 
-def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: GatewayService) -> FastAPI:
+def initialize_fastapi(
+    settings: Settings,
+    bot_app: FastAPI,
+    gateway: GatewayService,
+    instances: InstanceService,
+) -> FastAPI:
     """初始化 FastAPI，并装配浏览器检查与 Bot 生命周期"""
 
     @asynccontextmanager
@@ -67,9 +73,11 @@ def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: GatewaySer
         logger.info("启动检查通过，Manager 已就绪")
         try:
             await gateway.start()
+            await instances.start_auto_instances()
             async with bot_app.router.lifespan_context(bot_app):
                 yield
         finally:
+            await instances.close()
             await gateway.close()
             logger.info("Manager 已关闭")
 
@@ -82,15 +90,15 @@ def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: GatewaySer
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app() -> FastAPI:
     """组装日志、Web 与 Bot 应用及健康入口"""
-    settings = settings if settings is not None else Settings()
+    settings = get_settings()
     configure_logging(settings.log_level)
-    gateway = GatewayService.from_config_file(settings.gateway_config_path)
+    gateway = get_gateway_service()
+    instances = get_instance_service()
     bot_app = initialize_nonebot(settings, gateway)
-    initialize_admin_controllers()
-    app = initialize_fastapi(settings, bot_app, gateway)
-    app.state.gateway = gateway
+    load_controllers()
+    app = initialize_fastapi(settings, bot_app, gateway, instances)
     app.include_router(admin_router)
     app.include_router(gateway_router)
     app.mount('/manager', bot_app)

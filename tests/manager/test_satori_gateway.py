@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from kiribot.controller.gateway import router
 from kiribot.models.gateway import GatewayConfig
-from kiribot.services.gateway import GatewayService
+from kiribot.services.gateway import GatewayService, get_gateway_service
 from kiribot.services.gateway.models import GatewayProtocol, SubscriberKey
 from kiribot.services.gateway.registry import ExternalSession, Subscriber
 from kiribot.services.gateway.satori.api_client import SatoriApiClient
@@ -42,6 +42,7 @@ def create_client(online: bool = True) -> tuple[TestClient, GatewayService]:
         gateway.registry.mark_external_ready("chronocat", GatewayProtocol.SATORI)
     app = FastAPI()
     app.state.gateway = gateway
+    app.dependency_overrides[get_gateway_service] = lambda: gateway
     app.include_router(router)
     return TestClient(app), gateway
 
