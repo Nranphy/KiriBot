@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     instances_config_path: Path = Path("config/instances.json")
     """Worker 实例 JSON 配置路径，相对路径基于工作目录"""
 
+    permissions_config_path: Path = Path('config/permissions.json')
+    """权限 JSON 配置路径，相对路径基于工作目录"""
+
 
 @lru_cache
 def get_settings() -> Settings:

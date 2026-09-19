@@ -11,6 +11,7 @@ from kiribot.clients.database import get_database_client
 from kiribot.infra.config import get_settings
 from kiribot.services.gateway import get_gateway_service
 from kiribot.services.instances import get_instance_service
+from kiribot.services.permissions import get_permission_service
 from kiribot.services.users import get_user_recorder, get_user_service
 
 
@@ -24,6 +25,7 @@ def reset_nonebot_driver(
     get_gateway_service.cache_clear()
     get_user_recorder.cache_clear()
     get_user_service.cache_clear()
+    get_permission_service.cache_clear()
     get_database_client.cache_clear()
     get_settings.cache_clear()
     monkeypatch.setenv(
@@ -33,6 +35,10 @@ def reset_nonebot_driver(
     monkeypatch.setenv(
         "KIRIBOT_INSTANCES_CONFIG_PATH",
         str(tmp_path / "missing-instances.json"),
+    )
+    monkeypatch.setenv(
+        "KIRIBOT_PERMISSIONS_CONFIG_PATH",
+        str(tmp_path / "missing-permissions.json"),
     )
     monkeypatch.setenv(
         "KIRIBOT_DATABASE_URL",
@@ -45,5 +51,6 @@ def reset_nonebot_driver(
     get_gateway_service.cache_clear()
     get_user_recorder.cache_clear()
     get_user_service.cache_clear()
+    get_permission_service.cache_clear()
     get_database_client.cache_clear()
     get_settings.cache_clear()

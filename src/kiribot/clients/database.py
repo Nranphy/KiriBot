@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, select, text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from kiribot.infra.config import get_settings
+from kiribot.models.permissions import PermissionType
 from kiribot.models.users import UserObservation
 
 
@@ -64,6 +65,29 @@ class GroupTable(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime())
     updated_at: Mapped[datetime] = mapped_column(DateTime())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime())
+
+
+class UserPermissionTable(Base):
+    __tablename__ = 'user_permissions'
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey('users.id', ondelete='CASCADE'),
+        primary_key=True,
+    )
+    permission_type: Mapped[PermissionType] = mapped_column(
+        Enum(
+            PermissionType,
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            name='permission_type',
+        ),
+        primary_key=True,
+    )
+    group_ids: Mapped[str | None] = mapped_column(Text())
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime())
+    created_at: Mapped[datetime] = mapped_column(DateTime())
+    updated_at: Mapped[datetime] = mapped_column(DateTime())
 
 
 class DatabaseClient:
