@@ -78,6 +78,7 @@ def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
         "0.0.0.0",
         8000,
         process_client,
+        lambda: 18080,
     )
     return service, process_client
 
@@ -99,6 +100,7 @@ async def test_manager_starts_worker_with_gateway_environment(tmp_path: Path) ->
                 "echo-worker/napcat-1/onebot/v11/ws"
             ),
             "KIRIBOT_WORKER_ACCESS_TOKEN": "runtime-secret",
+            "KIRIBOT_WORKER_PORT": "18080",
         },
     )
 

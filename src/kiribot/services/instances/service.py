@@ -1,6 +1,8 @@
 """Worker 实例配置和进程生命周期"""
 
 import asyncio
+import socket
+from collections.abc import Callable
 from pathlib import Path
 
 from kiribot.clients.process import ProcessClient
@@ -39,6 +41,7 @@ class InstanceService:
         gateway_host: str,
         gateway_port: int,
         process_client: ProcessClient | None = None,
+        port_allocator: Callable[[], int] | None = None,
     ) -> None:
         self.config = config
         self.gateway_config = gateway_config
@@ -46,6 +49,7 @@ class InstanceService:
         self.gateway_host = self._normalize_host(gateway_host)
         self.gateway_port = gateway_port
         self.process_client = process_client or ProcessClient()
+        self._port_allocator = port_allocator or self._allocate_port
         self._processes: dict[str, asyncio.subprocess.Process] = {}
         self._lock = asyncio.Lock()
         self._validate_config()
@@ -59,6 +63,7 @@ class InstanceService:
         gateway_host: str,
         gateway_port: int,
         process_client: ProcessClient | None = None,
+        port_allocator: Callable[[], int] | None = None,
     ) -> InstanceService:
         try:
             content = path.read_text(encoding='utf-8')
@@ -73,6 +78,7 @@ class InstanceService:
             gateway_host,
             gateway_port,
             process_client,
+            port_allocator,
         )
 
     def list(self) -> list[WorkerInstanceStatus]:
@@ -105,6 +111,7 @@ class InstanceService:
             environment = {
                 'KIRIBOT_WORKER_GATEWAY_URL': self._gateway_url(instance_id, instance),
                 'KIRIBOT_WORKER_ACCESS_TOKEN': self.gateway_token,
+                'KIRIBOT_WORKER_PORT': str(self._port_allocator()),
             }
             process = await self.process_client.start(
                 instance.command,
@@ -172,3 +179,10 @@ class InstanceService:
         if ':' in host:
             return f'[{host}]'
         return host
+
+    @staticmethod
+    def _allocate_port() -> int:
+        """请求系统分配一个当前可用的本地监听端口"""
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            return listener.getsockname()[1]

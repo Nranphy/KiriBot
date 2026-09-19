@@ -10,7 +10,7 @@ def main() -> None:
     settings = WorkerSettings()  # pyright: ignore[reportCallIssue]
     initialize_nonebot(settings)
     nonebot.load_plugin('kiribot_worker.plugins.echo')
-    nonebot.run(host=settings.host, port=settings.port)
+    nonebot.run()
 
 
 if __name__ == '__main__':

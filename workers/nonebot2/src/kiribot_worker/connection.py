@@ -25,8 +25,8 @@ class WorkerSettings(BaseSettings):
     host: str = Field(default='127.0.0.1', min_length=1)
     """NoneBot Driver 监听地址"""
 
-    port: int = Field(default=0, ge=0, le=65535)
-    """NoneBot Driver 监听端口，默认由系统分配以避免实例冲突"""
+    port: int = Field(default=8080, ge=1, le=65535)
+    """NoneBot Driver 监听端口，运行实例由 Manager 注入"""
 
     log_level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO'
     """NoneBot 日志等级"""
@@ -39,6 +39,8 @@ def initialize_nonebot(settings: WorkerSettings) -> None:
         driver='~fastapi+~httpx+~websockets',
         log_level=settings.log_level,
         command_start={'/'},
+        host=settings.host,
+        port=settings.port,
         onebot_v11_ws_urls={settings.gateway_url},
         onebot_v11_access_token=settings.access_token,
     )

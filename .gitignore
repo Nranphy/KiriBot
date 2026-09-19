@@ -33,3 +33,6 @@ Thumbs.db
 # 本地配置文件
 /config/gateway.json
 /config/instances.json
+
+# 本地临时文件
+/temp/
