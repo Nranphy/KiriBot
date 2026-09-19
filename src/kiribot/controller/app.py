@@ -9,10 +9,8 @@ from loguru import logger
 from nonebot.adapters.onebot.v11 import Adapter as OneBotAdapter
 from nonebot.adapters.satori import Adapter as SatoriAdapter
 
-from kiribot.controller.admin.health import (
-    create_health_router,
-    register_health_command,
-)
+from kiribot.controller.admin import initialize_admin_controllers
+from kiribot.controller.admin import router as admin_router
 from kiribot.controller.gateway import router as gateway_router
 from kiribot.infra.config import Settings
 from kiribot.infra.log import configure_logging
@@ -54,7 +52,6 @@ def initialize_nonebot(settings: Settings, gateway: GatewayService) -> FastAPI:
     driver = nonebot.get_driver()
     for adapter in (OneBotAdapter, SatoriAdapter):
         driver.register_adapter(adapter)
-    register_health_command()
     bot_app: FastAPI = nonebot.get_asgi()
     return bot_app
 
@@ -91,9 +88,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(settings.log_level)
     gateway = GatewayService.from_config_file(settings.gateway_config_path)
     bot_app = initialize_nonebot(settings, gateway)
+    initialize_admin_controllers()
     app = initialize_fastapi(settings, bot_app, gateway)
     app.state.gateway = gateway
-    app.include_router(create_health_router())
+    app.include_router(admin_router)
     app.include_router(gateway_router)
     app.mount('/manager', bot_app)
     return app

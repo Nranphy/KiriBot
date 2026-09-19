@@ -2,12 +2,10 @@
 
 from typing import Literal
 
-from fastapi import APIRouter
-from nonebot import on_command
-from nonebot.matcher import Matcher
+from nonebot_plugin_alconna import Alconna, UniMessage, on_alconna
 from pydantic import BaseModel
 
-_health_matcher: type[Matcher] | None = None
+from kiribot.controller.admin import router
 
 
 class HealthResponse(BaseModel):
@@ -16,28 +14,15 @@ class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
 
 
-def create_health_router() -> APIRouter:
-    """创建健康接口"""
-    router = APIRouter()
-
-    @router.get("/health", response_model=HealthResponse)
-    async def health() -> HealthResponse:
-        return HealthResponse()
-
-    return router
+@router.get('/health', response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse()
 
 
-def register_health_command() -> None:
-    """幂等注册 Manager 的 Bot 健康命令"""
-    global _health_matcher
+health_command = on_alconna(Alconna('health'), use_cmd_start=True)
 
-    if _health_matcher is not None:
-        return
 
-    matcher = on_command('health')
-
-    @matcher.handle()
-    async def handle_health() -> None:
-        await matcher.finish('KiriBot Manager 运行正常')
-
-    _health_matcher = matcher
+@health_command.handle()
+async def handle_health() -> None:
+    """响应跨平台 Bot 健康命令"""
+    await UniMessage.text('KiriBot Manager 运行正常').finish()
