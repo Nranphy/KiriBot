@@ -200,7 +200,7 @@ class InstanceService:
 
     @staticmethod
     def _allocate_port() -> int:
-        """请求系统分配一个当前可用的本地监听端口"""
+        """在实例启动锁内请求一个当前可用的本地监听端口"""
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             return listener.getsockname()[1]

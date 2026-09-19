@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from kiribot.controller.app import create_app
 from kiribot.infra.config import Settings
+from kiribot.services.gateway import get_gateway_service
+from kiribot.services.users import get_user_recorder
 
 
 def test_environment_overrides_dotenv(
@@ -51,3 +53,30 @@ def test_browser_failure_blocks_startup(monkeypatch: pytest.MonkeyPatch) -> None
         TestClient(create_app()),
     ):
         pass
+
+
+def test_database_failure_blocks_startup_and_releases_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    database = AsyncMock()
+    database.start.side_effect = RuntimeError("database unavailable")
+    monkeypatch.setattr(
+        "kiribot.controller.app.get_database_client",
+        lambda: database,
+    )
+    gateway = get_gateway_service()
+    gateway.start = AsyncMock()  # type: ignore[method-assign]
+    recorder = get_user_recorder()
+    recorder.start = AsyncMock()  # type: ignore[method-assign]
+
+    with (
+        pytest.raises(RuntimeError, match="database unavailable"),
+        TestClient(create_app()),
+    ):
+        pass
+
+    database.start.assert_awaited_once()
+    database.close.assert_awaited_once()
+    recorder.start.assert_not_awaited()
+    gateway.start.assert_not_awaited()

@@ -1,7 +1,7 @@
 """应用工厂与生命周期"""
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 import nonebot
 from fastapi import FastAPI
@@ -74,20 +74,20 @@ def initialize_fastapi(
         logger.info("正在检查 Playwright 无头浏览器")
         await check_playwright(settings.playwright_timeout)
         database = get_database_client()
-        await database.start()
-        await user_recorder.start()
-        logger.info("启动检查通过，Manager 已就绪")
-        try:
+        async with AsyncExitStack() as stack:
+            # 关闭回调在启动前登记，以便部分初始化失败时也能释放资源。
+            stack.push_async_callback(database.close)
+            await database.start()
+            stack.push_async_callback(user_recorder.close)
+            await user_recorder.start()
+            stack.push_async_callback(gateway.close)
             await gateway.start()
+            stack.push_async_callback(instances.close)
             await instances.start_auto_instances()
-            async with bot_app.router.lifespan_context(bot_app):
-                yield
-        finally:
-            await instances.close()
-            await gateway.close()
-            await user_recorder.close()
-            await database.close()
-            logger.info("Manager 已关闭")
+            await stack.enter_async_context(bot_app.router.lifespan_context(bot_app))
+            logger.info('启动检查通过，Manager 已就绪')
+            yield
+        logger.info('Manager 已关闭')
 
     return FastAPI(
         title='KiriBot Manager',
