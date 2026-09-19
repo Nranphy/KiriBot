@@ -2,10 +2,12 @@
 
 from typing import Literal
 
+from nonebot.params import Depends
 from nonebot_plugin_alconna import Alconna, UniMessage, on_alconna
 from pydantic import BaseModel
 
 from kiribot.controller.admin import router
+from kiribot.controller.admin.dependencies import depend_superadmin
 
 
 class HealthResponse(BaseModel):
@@ -23,6 +25,8 @@ health_command = on_alconna(Alconna('health'), use_cmd_start=True)
 
 
 @health_command.handle()
-async def handle_health() -> None:
+async def handle_health(
+    _permission: None = Depends(depend_superadmin),
+) -> None:
     """响应跨平台 Bot 健康命令"""
     await UniMessage.text('KiriBot Manager 运行正常').finish()

@@ -18,6 +18,7 @@ from kiribot.models.permissions import (
     PermissionsConfig,
     PermissionType,
 )
+from kiribot.models.users import ChatPlatform
 
 
 class UserNotFoundError(LookupError):
@@ -30,6 +31,10 @@ class GroupNotFoundError(LookupError):
 
 class InvalidPermissionScopeError(ValueError):
     """权限群聊范围为空或格式无效"""
+
+
+class PermissionDeniedError(PermissionError):
+    """当前平台身份不具备要求的权限"""
 
 
 class PermissionService:
@@ -110,6 +115,53 @@ class PermissionService:
         """按固定优先级返回当前上下文的最终权限"""
         active = await self.get_active_permissions(user_id, group_id, at)
         return next(permission for permission in self._priority if permission in active)
+
+    async def get_identity_permission(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+        open_group_id: str | None = None,
+        open_channel_id: str | None = None,
+        at: datetime | None = None,
+    ) -> PermissionType:
+        """按平台身份查询权限，配置身份无需等待自动记录落库"""
+        identity_key = (platform.value, open_user_id)
+        if identity_key in self.blacklist:
+            return PermissionType.BANNED
+
+        async with self.database.sessions() as session:
+            identity = await session.get(IdentityTable, identity_key)
+            if identity is None:
+                return PermissionType.SUPERADMIN if identity_key in self.superadmins else PermissionType.USER
+            group_id = None
+            if open_group_id is not None:
+                group_id = await session.scalar(
+                    select(GroupTable.id).where(
+                        GroupTable.platform == platform.value,
+                        GroupTable.open_group_id == open_group_id,
+                        GroupTable.open_channel_id == open_channel_id,
+                    )
+                )
+        return await self.get_effective_permission(identity.user_id, group_id, at)
+
+    async def require_superadmin(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+        open_group_id: str | None = None,
+        open_channel_id: str | None = None,
+        at: datetime | None = None,
+    ) -> None:
+        """要求平台身份在当前上下文中的最终权限为 SUPERADMIN"""
+        permission = await self.get_identity_permission(
+            platform,
+            open_user_id,
+            open_group_id,
+            open_channel_id,
+            at,
+        )
+        if permission is not PermissionType.SUPERADMIN:
+            raise PermissionDeniedError('需要 SUPERADMIN 权限')
 
     async def grant(
         self,

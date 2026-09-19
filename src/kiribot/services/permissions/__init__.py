@@ -7,6 +7,7 @@ from kiribot.infra.config import get_settings
 from kiribot.services.permissions.service import (
     GroupNotFoundError,
     InvalidPermissionScopeError,
+    PermissionDeniedError,
     PermissionService,
     UserNotFoundError,
 )
@@ -24,6 +25,7 @@ def get_permission_service() -> PermissionService:
 __all__ = [
     'GroupNotFoundError',
     'InvalidPermissionScopeError',
+    'PermissionDeniedError',
     'PermissionService',
     'UserNotFoundError',
     'get_permission_service',

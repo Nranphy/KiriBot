@@ -33,12 +33,23 @@ async def test_manager_uses_standard_internal_connection(
             }
         )
     )
+    permissions = tmp_path / "permissions.json"
+    permissions.write_text(
+        json.dumps(
+            {
+                "superadmins": [
+                    {"platform": "qq", "open_user_id": "123456"}
+                ]
+            }
+        )
+    )
     monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]
     monkeypatch.setenv("KIRIBOT_PORT", str(port))
     monkeypatch.setenv("KIRIBOT_GATEWAY_CONFIG_PATH", str(config))
+    monkeypatch.setenv("KIRIBOT_PERMISSIONS_CONFIG_PATH", str(permissions))
     app = create_app()
     gateway: GatewayService = get_gateway_service()
     server = uvicorn.Server(uvicorn.Config(app, log_config=None))

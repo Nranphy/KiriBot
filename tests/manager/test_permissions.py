@@ -18,6 +18,7 @@ from kiribot.models.users import ChatPlatform, GroupObservation, UserObservation
 from kiribot.services.permissions import (
     GroupNotFoundError,
     InvalidPermissionScopeError,
+    PermissionDeniedError,
     PermissionService,
 )
 from kiribot.services.users import UserService
@@ -131,6 +132,16 @@ async def test_config_permissions_override_database(tmp_path: Path) -> None:
                 }
             ),
         )
+        assert (
+            await superadmin.get_identity_permission(
+                ChatPlatform.QQ,
+                '10001',
+            )
+            is PermissionType.SUPERADMIN
+        )
+        await superadmin.require_superadmin(ChatPlatform.QQ, '10001')
+        with pytest.raises(PermissionDeniedError):
+            await superadmin.require_superadmin(ChatPlatform.QQ, 'unknown')
         await superadmin.grant(user_id, PermissionType.BANNED)
         assert (
             await superadmin.get_effective_permission(user_id, group_ids[0])

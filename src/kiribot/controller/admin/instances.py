@@ -3,16 +3,19 @@
 from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Path
+from nonebot.params import Depends as NoneBotDepends
 from nonebot_plugin_alconna import (
     Alconna,
+    AlconnaMatch,
     Args,
-    Arparma,
+    Match,
     Subcommand,
     UniMessage,
     on_alconna,
 )
 
 from kiribot.controller.admin import router
+from kiribot.controller.admin.dependencies import depend_superadmin
 from kiribot.models.instances import WorkerInstanceStatus
 from kiribot.services.instances import (
     InstanceAlreadyRunningError,
@@ -93,46 +96,81 @@ instance_command = on_alconna(
 )
 
 
-@instance_command.handle()
-async def handle_instance(result: Arparma) -> None:
-    """通过机器人命令查询或控制 Worker"""
+@instance_command.assign('$main')
+async def handle_instance_help(
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """提示 Worker 实例命令的可用操作"""
+    await UniMessage.text('请使用 instance list，或指定 status/start/stop/restart 和实例 ID').finish()
+
+
+@instance_command.assign('list')
+async def handle_instance_list(
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """列出 Worker 实例状态"""
     service = get_instance_service()
-    action: Literal['list', 'status', 'start', 'stop', 'restart']
-    if result.find('list'):
-        action = 'list'
-    elif result.find('status'):
-        action = 'status'
-    elif result.find('start'):
-        action = 'start'
-    elif result.find('stop'):
-        action = 'stop'
-    elif result.find('restart'):
-        action = 'restart'
-    else:
-        await UniMessage.text(
-            '请使用 instance list，或指定 status/start/stop/restart 和实例 ID'
-        ).finish()
-        return
+    statuses = service.list()
+    message = '\n'.join(f'{status.instance_id}: {"运行中" if status.running else "已停止"}' for status in statuses)
+    await UniMessage.text(message or '没有配置 Worker 实例').finish()
 
-    if action == 'list':
-        statuses = service.list()
-        message = '\n'.join(
-            f'{status.instance_id}: {"运行中" if status.running else "已停止"}'
-            for status in statuses
-        )
-        await UniMessage.text(message or '没有配置 Worker 实例').finish()
-        return
 
-    instance_id = result.all_matched_args['instance_id']
+@instance_command.assign('status')
+async def handle_instance_status(
+    instance_id: Match[str] = AlconnaMatch('instance_id'),
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """查询指定 Worker 实例状态"""
+    service = get_instance_service()
     try:
-        if action == 'status':
-            status = service.get(instance_id)
-        elif action == 'start':
-            status = await service.start(instance_id)
-        elif action == 'stop':
-            status = await service.stop(instance_id)
-        else:
-            status = await service.restart(instance_id)
+        status = service.get(instance_id.result)
+    except InstanceNotFoundError:
+        await UniMessage.text('Worker 实例不存在').finish()
+        return
+    state = '运行中' if status.running else '已停止'
+    pid = f'，PID {status.pid}' if status.pid is not None else ''
+    await UniMessage.text(f'Worker {status.instance_id}：{state}{pid}').finish()
+
+
+@instance_command.assign('start')
+async def handle_instance_start(
+    instance_id: Match[str] = AlconnaMatch('instance_id'),
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """启动指定 Worker 实例"""
+    await _change_instance('start', instance_id.result)
+
+
+@instance_command.assign('stop')
+async def handle_instance_stop(
+    instance_id: Match[str] = AlconnaMatch('instance_id'),
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """停止指定 Worker 实例"""
+    await _change_instance('stop', instance_id.result)
+
+
+@instance_command.assign('restart')
+async def handle_instance_restart(
+    instance_id: Match[str] = AlconnaMatch('instance_id'),
+    _permission: None = NoneBotDepends(depend_superadmin),
+) -> None:
+    """重启指定 Worker 实例"""
+    await _change_instance('restart', instance_id.result)
+
+
+async def _change_instance(
+    action: Literal['start', 'stop', 'restart'],
+    instance_id: str,
+) -> None:
+    service = get_instance_service()
+    operation = {
+        'start': service.start,
+        'stop': service.stop,
+        'restart': service.restart,
+    }[action]
+    try:
+        status = await operation(instance_id)
     except InstanceNotFoundError:
         await UniMessage.text('Worker 实例不存在').finish()
         return
@@ -141,11 +179,6 @@ async def handle_instance(result: Arparma) -> None:
         return
     except InstanceNotRunningError:
         await UniMessage.text('Worker 实例未运行').finish()
-        return
-    if action == 'status':
-        state = '运行中' if status.running else '已停止'
-        pid = f'，PID {status.pid}' if status.pid is not None else ''
-        await UniMessage.text(f'Worker {status.instance_id}：{state}{pid}').finish()
         return
     state = {
         'start': '已启动',
