@@ -1,6 +1,7 @@
 """验证健康命令的 SUPERADMIN 鉴权与实际事件处理"""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -11,6 +12,8 @@ from nonebot.message import handle_event
 
 from kiribot.clients.database import get_database_client
 from kiribot.controller.app import create_app
+from kiribot.models.users import ChatPlatform, UserObservation
+from kiribot.services.users import get_user_service
 
 
 @pytest.mark.asyncio
@@ -33,6 +36,13 @@ async def test_manager_command_requires_superadmin(
     create_app()
     database = get_database_client()
     await database.start()
+    await get_user_service().record(
+        UserObservation(
+            platform=ChatPlatform.QQ,
+            open_user_id='654321',
+            observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
     send = AsyncMock(return_value={"message_id": 1})
     monkeypatch.setattr(Bot, "send", send)
     bot = Bot(nonebot.get_adapter(Adapter), "10000")
@@ -44,6 +54,10 @@ async def test_manager_command_requires_superadmin(
         ('/instance start missing', 'Worker 实例不存在'),
         ('/instance stop missing', 'Worker 实例不存在'),
         ('/instance restart missing', 'Worker 实例不存在'),
+        ('/permission grant qq 654321 ADMIN', '已授予 ADMIN'),
+        ('/permission list qq 654321', '全局最终权限：ADMIN'),
+        ('/permission revoke qq 654321 ADMIN', '已撤销 ADMIN'),
+        ('/permission list qq 654321', '全局最终权限：USER'),
     )
     try:
         for message_id, (command, _) in enumerate(commands, start=1):

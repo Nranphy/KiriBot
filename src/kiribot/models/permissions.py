@@ -54,3 +54,13 @@ class PermissionRecord(BaseModel):
     permission_type: PermissionType
     group_ids: frozenset[int] | None
     expired_at: datetime | None
+
+
+class IdentityPermissions(BaseModel):
+    """平台身份的权限概览"""
+
+    platform: ChatPlatform
+    open_user_id: str
+    user_id: int | None
+    global_permission: PermissionType
+    permissions: list[PermissionRecord]

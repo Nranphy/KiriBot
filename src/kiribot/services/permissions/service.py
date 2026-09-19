@@ -13,6 +13,7 @@ from kiribot.clients.database import (
     UserTable,
 )
 from kiribot.models.permissions import (
+    IdentityPermissions,
     PermissionIdentityConfig,
     PermissionRecord,
     PermissionsConfig,
@@ -163,6 +164,70 @@ class PermissionService:
         if permission is not PermissionType.SUPERADMIN:
             raise PermissionDeniedError('需要 SUPERADMIN 权限')
 
+    async def list_identity_permissions(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+    ) -> IdentityPermissions:
+        """返回平台身份的配置结果和全部数据库权限记录"""
+        identity_key = (platform.value, open_user_id)
+        async with self.database.sessions() as session:
+            identity = await session.get(IdentityTable, identity_key)
+            if identity is None:
+                if identity_key not in self.superadmins | self.blacklist:
+                    raise UserNotFoundError('用户身份不存在')
+                permission_rows = []
+            else:
+                permission_rows = list(
+                    await session.scalars(
+                        select(UserPermissionTable).where(UserPermissionTable.user_id == identity.user_id)
+                    )
+                )
+        permissions = [
+            self._record_from_row(row)
+            for row in sorted(
+                permission_rows,
+                key=lambda row: self._priority.index(row.permission_type),
+            )
+        ]
+        return IdentityPermissions(
+            platform=platform,
+            open_user_id=open_user_id,
+            user_id=identity.user_id if identity is not None else None,
+            global_permission=await self.get_identity_permission(
+                platform,
+                open_user_id,
+            ),
+            permissions=permissions,
+        )
+
+    async def grant_identity(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+        permission_type: PermissionType,
+        group_ids: set[int] | None = None,
+        expired_at: datetime | None = None,
+    ) -> PermissionRecord:
+        """按平台身份新增或覆盖数据库权限"""
+        user_id = await self._get_identity_user_id(platform, open_user_id)
+        return await self.grant(
+            user_id,
+            permission_type,
+            group_ids,
+            expired_at,
+        )
+
+    async def revoke_identity(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+        permission_type: PermissionType,
+    ) -> bool:
+        """按平台身份撤销数据库权限"""
+        user_id = await self._get_identity_user_id(platform, open_user_id)
+        return await self.revoke(user_id, permission_type)
+
     async def grant(
         self,
         user_id: int,
@@ -234,6 +299,29 @@ class PermissionService:
                 return False
             await session.delete(row)
             return True
+
+    async def _get_identity_user_id(
+        self,
+        platform: ChatPlatform,
+        open_user_id: str,
+    ) -> int:
+        async with self.database.sessions() as session:
+            identity = await session.get(
+                IdentityTable,
+                (platform.value, open_user_id),
+            )
+        if identity is None:
+            raise UserNotFoundError('用户身份不存在')
+        return identity.user_id
+
+    @classmethod
+    def _record_from_row(cls, row: UserPermissionTable) -> PermissionRecord:
+        return PermissionRecord(
+            user_id=row.user_id,
+            permission_type=row.permission_type,
+            group_ids=(frozenset(cls._parse_group_ids(row.group_ids)) if row.group_ids is not None else None),
+            expired_at=row.expired_at,
+        )
 
     @staticmethod
     def _identity_keys(

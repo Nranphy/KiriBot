@@ -1,9 +1,12 @@
 """验证权限配置、群聊范围、过期和多权限优先级"""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import func, select
 
@@ -13,6 +16,7 @@ from kiribot.clients.database import (
     IdentityTable,
     UserPermissionTable,
 )
+from kiribot.controller.app import create_app
 from kiribot.models.permissions import PermissionsConfig, PermissionType
 from kiribot.models.users import ChatPlatform, GroupObservation, UserObservation
 from kiribot.services.permissions import (
@@ -20,6 +24,7 @@ from kiribot.services.permissions import (
     InvalidPermissionScopeError,
     PermissionDeniedError,
     PermissionService,
+    get_permission_service,
 )
 from kiribot.services.users import UserService
 
@@ -51,6 +56,70 @@ def test_permissions_config_rejects_duplicates_and_conflicts(tmp_path: Path) -> 
         )
 
 
+def test_permission_management_routes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = DatabaseClient(
+        f"sqlite+aiosqlite:///{(tmp_path / 'permission-routes.db').as_posix()}"
+    )
+
+    async def prepare() -> int:
+        await database.start()
+        await UserService(database).record(
+            UserObservation(
+                platform=ChatPlatform.QQ,
+                open_user_id='10001',
+                observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+                group=GroupObservation(ChatPlatform.QQ, '20001'),
+            )
+        )
+        async with database.sessions() as session:
+            group_id = await session.scalar(select(GroupTable.id))
+        assert group_id is not None
+        return group_id
+
+    group_id = asyncio.run(prepare())
+    service = PermissionService(database)
+    monkeypatch.setattr('kiribot.controller.app.check_playwright', AsyncMock())
+    app = create_app()
+    app.dependency_overrides[get_permission_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            initial = client.get('/permissions/qq/10001')
+            granted = client.put(
+                '/permissions/qq/10001/ADMIN',
+                json={
+                    'group_ids': [group_id],
+                    'expired_at': '2027-01-01T00:00:00+08:00',
+                },
+            )
+            listed = client.get('/permissions/qq/10001')
+            invalid_time = client.put(
+                '/permissions/qq/10001/ADMIN',
+                json={'expired_at': '2027-01-01T00:00:00'},
+            )
+            revoked = client.delete('/permissions/qq/10001/ADMIN')
+            missing_record = client.delete('/permissions/qq/10001/ADMIN')
+            missing_user = client.get('/permissions/qq/unknown')
+    finally:
+        asyncio.run(database.close())
+
+    assert initial.status_code == 200
+    assert initial.json()['global_permission'] == 'USER'
+    assert initial.json()['permissions'] == []
+    assert granted.status_code == 200
+    assert granted.json()['permission_type'] == 'ADMIN'
+    assert granted.json()['group_ids'] == [group_id]
+    assert listed.json()['permissions'] == [granted.json()]
+    assert invalid_time.status_code == 422
+    assert revoked.status_code == 204
+    assert missing_record.status_code == 404
+    assert missing_record.json() == {'detail': '权限记录不存在'}
+    assert missing_user.status_code == 404
+    assert missing_user.json() == {'detail': '用户身份不存在'}
+
+
 @pytest.mark.asyncio
 async def test_grants_multiple_scoped_permissions_and_resolves_priority(
     tmp_path: Path,
@@ -64,12 +133,20 @@ async def test_grants_multiple_scoped_permissions_and_resolves_priority(
             is PermissionType.USER
         )
 
-        record = await permissions.grant(
-            user_id,
+        record = await permissions.grant_identity(
+            ChatPlatform.QQ,
+            '10001',
             PermissionType.ADMIN,
             {group_ids[1], group_ids[0]},
         )
         assert record.group_ids == frozenset(group_ids)
+        overview = await permissions.list_identity_permissions(
+            ChatPlatform.QQ,
+            '10001',
+        )
+        assert overview.user_id == user_id
+        assert overview.global_permission is PermissionType.USER
+        assert overview.permissions == [record]
         assert (
             await permissions.get_effective_permission(user_id, group_ids[0], now)
             is PermissionType.ADMIN
@@ -112,7 +189,11 @@ async def test_grants_multiple_scoped_permissions_and_resolves_priority(
             assert admin is not None
             assert admin.group_ids == ','.join(str(group_id) for group_id in group_ids)
 
-        assert await permissions.revoke(user_id, PermissionType.BANNED)
+        assert await permissions.revoke_identity(
+            ChatPlatform.QQ,
+            '10001',
+            PermissionType.BANNED,
+        )
         assert not await permissions.revoke(user_id, PermissionType.BANNED)
     finally:
         await database.close()

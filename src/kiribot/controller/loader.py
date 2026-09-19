@@ -8,5 +8,6 @@ def load_controllers() -> None:
     for module in (
         'kiribot.controller.admin.health',
         'kiribot.controller.admin.instances',
+        'kiribot.controller.admin.permissions',
     ):
         import_module(module)
