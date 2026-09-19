@@ -11,32 +11,55 @@ from nonebot.adapters.satori import Adapter as SatoriAdapter
 
 from kiribot.controller.admin.health import (
     create_health_router,
+    register_health_command,
 )
 from kiribot.controller.gateway import router as gateway_router
 from kiribot.infra.config import Settings
 from kiribot.infra.log import configure_logging
 from kiribot.infra.playwright import check_playwright
-from kiribot.services.gateway import Gateway
+from kiribot.services.gateway import GatewayService
 
 
-def initialize_nonebot(settings: Settings) -> FastAPI:
+def initialize_nonebot(settings: Settings, gateway: GatewayService) -> FastAPI:
     """初始化 NoneBot 及协议 Adapter，返回其 ASGI 应用"""
+    gateway_host = settings.host
+    if gateway_host in {'0.0.0.0', '::'}:
+        gateway_host = '127.0.0.1' if gateway_host == '0.0.0.0' else '[::1]'
+    elif ':' in gateway_host:
+        gateway_host = f'[{gateway_host}]'
+    onebot_clients = {
+        f'ws://{gateway_host}:{settings.port}/gateway/internal/manager/{name}/onebot/v11/ws'
+        for name, config in gateway.config.connections.items()
+        if config.protocol == 'onebot_v11'
+    }
+    satori_clients = [
+        {
+            'host': gateway_host,
+            'port': settings.port,
+            'path': f'gateway/internal/manager/{name}/satori',
+            'token': gateway.internal_token,
+        }
+        for name, config in gateway.config.connections.items()
+        if config.protocol == 'satori' and config.mode == 'forward'
+    ]
     nonebot.init(
         _env_file=(),
         driver='~fastapi+~httpx+~websockets',
         log_level=settings.log_level,
         command_start={'/'},
-        onebot_v11_ws_urls=set(),
-        satori_clients=[],
+        onebot_v11_ws_urls=onebot_clients,
+        onebot_v11_access_token=gateway.internal_token,
+        satori_clients=satori_clients,
     )
     driver = nonebot.get_driver()
     for adapter in (OneBotAdapter, SatoriAdapter):
         driver.register_adapter(adapter)
+    register_health_command()
     bot_app: FastAPI = nonebot.get_asgi()
     return bot_app
 
 
-def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: Gateway) -> FastAPI:
+def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: GatewayService) -> FastAPI:
     """初始化 FastAPI，并装配浏览器检查与 Bot 生命周期"""
 
     @asynccontextmanager
@@ -46,6 +69,7 @@ def initialize_fastapi(settings: Settings, bot_app: FastAPI, gateway: Gateway) -
         await check_playwright(settings.playwright_timeout)
         logger.info("启动检查通过，Manager 已就绪")
         try:
+            await gateway.start()
             async with bot_app.router.lifespan_context(bot_app):
                 yield
         finally:
@@ -65,16 +89,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """组装日志、Web 与 Bot 应用及健康入口"""
     settings = settings if settings is not None else Settings()
     configure_logging(settings.log_level)
-    bot_app = initialize_nonebot(settings)
-    host = settings.host
-    if host in {'0.0.0.0', '::'}:
-        host = '127.0.0.1' if host == '0.0.0.0' else '[::1]'
-    elif ':' in host:
-        host = f'[{host}]'
-    gateway = Gateway.from_config_file(
-        settings.gateway_config_path,
-        manager_url=f'ws://{host}:{settings.port}/manager/onebot/v11/ws',
-    )
+    gateway = GatewayService.from_config_file(settings.gateway_config_path)
+    bot_app = initialize_nonebot(settings, gateway)
     app = initialize_fastapi(settings, bot_app, gateway)
     app.state.gateway = gateway
     app.include_router(create_health_router())

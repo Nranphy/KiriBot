@@ -1,36 +1,91 @@
 """Gateway 外部服务登记配置"""
 
 import re
-from typing import Literal
+from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    AnyWebsocketUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
-class ExternalConnectionConfig(BaseModel):
-    """外部连接配置"""
+def validate_absolute_url(value: object, schemes: set[str], name: str) -> object:
+    """在 Pydantic 归一化前校验 URL 的绝对地址结构"""
+    if not isinstance(value, str):
+        return value
+    parsed = urlsplit(value)
+    if value != value.strip() or parsed.scheme not in schemes or not parsed.netloc:
+        raise ValueError(f'{name} 必须是包含主机的绝对地址')
+    return value
+
+
+class OneBot11ForwardConfig(BaseModel):
+    """OneBot 11 Universal 正向连接配置"""
 
     model_config = ConfigDict(extra='forbid')
-    protocol: Literal['onebot_v11', 'satori']
-    """外部服务使用的协议"""
-
-    mode: Literal['reverse', 'forward'] = 'reverse'
-    """连接方向：反向由外部服务连接 Gateway，正向由 Gateway 连接外部服务"""
-
+    protocol: Literal['onebot_v11']
+    mode: Literal['forward']
+    url: AnyWebsocketUrl
     token: str | None = Field(default=None, repr=False)
-    """外部连接的鉴权令牌，未配置时不校验令牌，且不在模型 repr 中显示"""
-
     self_id: str | None = Field(default=None, min_length=1)
-    """可选的账号限制，配置后仅接受该账号连接；字符串不能为空"""
 
-    url: str | None = None
-    """正向连接的外部服务地址，正向模式必须提供，反向模式无需配置"""
+    @field_validator('url', mode='before')
+    @classmethod
+    def validate_raw_url(cls, url: object) -> object:
+        return validate_absolute_url(url, {'ws', 'wss'}, 'OneBot 11 url')
 
-    @model_validator(mode='after')
-    def validate_address(self) -> ExternalConnectionConfig:
-        """正向服务必须登记地址，实际接入尚未实现"""
-        if self.mode == 'forward' and not self.url:
-            raise ValueError('正向连接必须提供 url')
-        return self
+
+class OneBot11ReverseConfig(BaseModel):
+    """OneBot 11 Universal 反向连接配置"""
+
+    model_config = ConfigDict(extra='forbid')
+    protocol: Literal['onebot_v11']
+    mode: Literal['reverse']
+    token: str | None = Field(default=None, repr=False)
+    self_id: str | None = Field(default=None, min_length=1)
+
+
+OneBot11ConnectionConfig = Annotated[
+    OneBot11ForwardConfig | OneBot11ReverseConfig,
+    Field(discriminator='mode'),
+]
+
+
+class SatoriForwardConfig(BaseModel):
+    """Satori 标准正向连接配置"""
+
+    model_config = ConfigDict(extra='forbid')
+    protocol: Literal['satori']
+    mode: Literal['forward'] = 'forward'
+    url: AnyHttpUrl | AnyWebsocketUrl
+    token: str | None = Field(default=None, repr=False)
+
+    @field_validator('url', mode='before')
+    @classmethod
+    def validate_raw_url(cls, url: object) -> object:
+        return validate_absolute_url(url, {'http', 'https', 'ws', 'wss'}, 'Satori url')
+
+    @field_validator('url')
+    @classmethod
+    def validate_service_url(cls, url: AnyHttpUrl | AnyWebsocketUrl) -> AnyHttpUrl | AnyWebsocketUrl:
+        """服务根地址不得夹带凭据、查询参数或片段"""
+        if url.username is not None or url.password is not None:
+            raise ValueError('Satori url 不能包含用户名或密码')
+        if url.query is not None or url.fragment is not None:
+            raise ValueError('Satori url 不能包含查询参数或片段')
+        return url
+
+
+ExternalConnectionConfig = Annotated[
+    OneBot11ConnectionConfig | SatoriForwardConfig,
+    Field(discriminator='protocol'),
+]
 
 
 class GatewayConfig(BaseModel):

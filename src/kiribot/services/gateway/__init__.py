@@ -1,5 +1,5 @@
 """Gateway 领域服务"""
 
-from kiribot.services.gateway.gateway import Gateway
+from kiribot.services.gateway.service import GatewayService
 
-__all__ = ["Gateway"]
+__all__ = ['GatewayService']
