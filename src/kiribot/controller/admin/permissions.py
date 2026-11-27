@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Path, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from nonebot.params import Depends as NoneBotDepends
 from nonebot_plugin_alconna import (
     Alconna,
@@ -15,9 +15,8 @@ from nonebot_plugin_alconna import (
     UniMessage,
     on_alconna,
 )
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from kiribot.controller.admin import router
 from kiribot.controller.admin.dependencies import depend_superadmin
 from kiribot.models.permissions import (
     IdentityPermissions,
@@ -33,47 +32,58 @@ from kiribot.services.permissions import (
     get_permission_service,
 )
 
+router = APIRouter()
 
-class GrantPermissionRequest(BaseModel):
-    """Web 授权请求"""
+
+class IdentityRequest(BaseModel):
+    """按平台身份定位用户"""
 
     model_config = ConfigDict(extra='forbid')
+
+    platform: ChatPlatform
+    open_user_id: str = Field(min_length=1)
+
+
+class PermissionRequest(IdentityRequest):
+    """指定用户及操作的权限类型"""
+
+    permission_type: PermissionType
+
+
+class GrantPermissionRequest(PermissionRequest):
+    """授予权限及可选的生效范围"""
 
     group_ids: set[int] | None = None
     expired_at: AwareDatetime | None = None
 
 
-@router.get(
-    '/permissions/{platform}/{open_user_id}',
+@router.post(
+    '/permissions/list',
     response_model=IdentityPermissions,
 )
 async def get_identity_permissions(
-    platform: ChatPlatform,
-    open_user_id: Annotated[str, Path(min_length=1)],
+    request: IdentityRequest,
     service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> IdentityPermissions:
     try:
-        return await service.list_identity_permissions(platform, open_user_id)
+        return await service.list_identity_permissions(request.platform, request.open_user_id)
     except UserNotFoundError as error:
         raise HTTPException(status_code=404, detail='用户身份不存在') from error
 
 
-@router.put(
-    '/permissions/{platform}/{open_user_id}/{permission_type}',
+@router.post(
+    '/permissions/grant',
     response_model=PermissionRecord,
 )
 async def grant_identity_permission(
-    platform: ChatPlatform,
-    open_user_id: Annotated[str, Path(min_length=1)],
-    permission_type: PermissionType,
     request: GrantPermissionRequest,
     service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> PermissionRecord:
     try:
         return await service.grant_identity(
-            platform,
-            open_user_id,
-            permission_type,
+            request.platform,
+            request.open_user_id,
+            request.permission_type,
             request.group_ids,
             request.expired_at,
         )
@@ -85,21 +95,19 @@ async def grant_identity_permission(
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
-@router.delete(
-    '/permissions/{platform}/{open_user_id}/{permission_type}',
+@router.post(
+    '/permissions/revoke',
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def revoke_identity_permission(
-    platform: ChatPlatform,
-    open_user_id: Annotated[str, Path(min_length=1)],
-    permission_type: PermissionType,
+    request: PermissionRequest,
     service: Annotated[PermissionService, Depends(get_permission_service)],
 ) -> Response:
     try:
         revoked = await service.revoke_identity(
-            platform,
-            open_user_id,
-            permission_type,
+            request.platform,
+            request.open_user_id,
+            request.permission_type,
         )
     except UserNotFoundError as error:
         raise HTTPException(status_code=404, detail='用户身份不存在') from error

@@ -23,7 +23,7 @@ HEADERS = {"X-Self-ID": "10001", "X-Client-Role": "Universal"}
 def create_client(token: str | None = None) -> TestClient:
     config = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "napcat-1": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
@@ -63,10 +63,13 @@ def internal_headers(client: TestClient) -> dict[str, str]:
 
 def test_missing_config_and_validation(tmp_path: Path) -> None:
     path = tmp_path / "nested/gateway.json"
-    assert GatewayService.from_config_file(path).config.connections == {}
+    assert GatewayService.from_config_file(path).config.external == {}
     assert not path.exists()
     path.parent.mkdir()
-    path.write_text('{"connections":{"bad/name":{}}}')
+    entry = {"protocol": "onebot_v11", "mode": "reverse", "platform": "qq"}
+    path.write_text(json.dumps({"external": {"manager": entry, "internal": entry}}))
+    assert set(GatewayService.from_config_file(path).config.external) == {"manager", "internal"}
+    path.write_text(json.dumps({"external": {"bad/name": entry}}))
     with pytest.raises(ValidationError):
         GatewayService.from_config_file(path)
 
@@ -125,7 +128,7 @@ def test_internal_requires_external_and_duplicate_external_is_rejected() -> None
 def test_forward_config_rejects_reverse_external_endpoint() -> None:
     config = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "napcat": {
                     "protocol": "onebot_v11",
                     "mode": "forward",
@@ -153,12 +156,12 @@ def test_config_discriminates_protocol_fields() -> None:
         GatewayConfig.model_validate({"internal_token": "must-not-be-configured"})
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate(
-            {"connections": {"bad": {"protocol": "onebot_v11"}}}
+            {"external": {"bad": {"protocol": "onebot_v11"}}}
         )
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate(
             {
-                "connections": {
+                "external": {
                     "bad": {"protocol": "satori", "mode": "reverse", "self_id": "1"}
                 }
             }
@@ -179,11 +182,11 @@ def test_config_discriminates_protocol_fields() -> None:
         },
     ):
         with pytest.raises(ValidationError):
-            GatewayConfig.model_validate({"connections": {"bad": connection}})
+            GatewayConfig.model_validate({"external": {"bad": connection}})
 
     forward = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "napcat": {
                     "protocol": "onebot_v11",
                     "mode": "forward",
@@ -193,12 +196,12 @@ def test_config_discriminates_protocol_fields() -> None:
             }
         }
     )
-    assert forward.connections["napcat"].mode == "forward"
+    assert forward.external["napcat"].mode == "forward"
     for invalid_url in ("http://127.0.0.1:3001/", "ws:///missing-host"):
         with pytest.raises(ValidationError):
             GatewayConfig.model_validate(
                 {
-                    "connections": {
+                    "external": {
                         "napcat": {
                             "protocol": "onebot_v11",
                             "mode": "forward",
@@ -249,7 +252,7 @@ async def test_forward_connection_reconnects_and_uses_bearer_token() -> None:
         port = server.sockets[0].getsockname()[1]
         config = GatewayConfig.model_validate(
             {
-                "connections": {
+                "external": {
                     "napcat": {
                         "protocol": "onebot_v11",
                         "mode": "forward",

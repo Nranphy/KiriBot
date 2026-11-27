@@ -41,7 +41,7 @@ class OneBot11Gateway:
         self.registry = registry
         self.config = config
         self.internal_token = internal_token
-        platforms = {name: config.platform for name, config in config.connections.items()}
+        platforms = {name: config.platform for name, config in config.external.items()}
         self.router = OneBot11Router(registry, timeout, observation_sink, platforms)
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.started = False
@@ -51,7 +51,7 @@ class OneBot11Gateway:
         if self.started:
             return
         self.started = True
-        for name, config in self.config.connections.items():
+        for name, config in self.config.external.items():
             if isinstance(config, OneBot11ForwardConfig):
                 self.tasks[name] = asyncio.create_task(self._run_forward(name, config))
             elif isinstance(config, OneBot11ReverseConfig):
@@ -101,7 +101,7 @@ class OneBot11Gateway:
             delay = min(delay * 2, 30)
 
     async def serve_external(self, websocket: WebSocket, name: str) -> None:
-        config = self.config.connections.get(name)
+        config = self.config.external.get(name)
         if not isinstance(config, OneBot11ReverseConfig):
             await websocket.close(code=1008)
             return

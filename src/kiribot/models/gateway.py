@@ -97,20 +97,13 @@ class GatewayConfig(BaseModel):
     """以服务名称登记连接，空 JSON 对象表示没有外部服务"""
 
     model_config = ConfigDict(extra='forbid')
-    connections: dict[str, ExternalConnectionConfig] = Field(default_factory=dict)
+    external: dict[str, ExternalConnectionConfig] = Field(default_factory=dict)
     """以外部服务名称为键的连接登记表，名称用于 WS 路由；默认为空"""
 
     @model_validator(mode='after')
     def validate_names(self) -> GatewayConfig:
         """连接名称必须是安全的 URL 路径段"""
-        for name in self.connections:
-            self._validate_name(name)
+        for name in self.external:
+            if re.fullmatch(r'[A-Za-z0-9_-]+', name) is None:
+                raise ValueError('连接名称不能为空，且仅允许英文、数字、横线和下划线')
         return self
-
-    @staticmethod
-    def _validate_name(name: str) -> None:
-        """检查名称格式并排除内部端点的保留名称"""
-        if re.fullmatch(r'[A-Za-z0-9_-]+', name) is None:
-            raise ValueError('连接名称不能为空，且仅允许英文、数字、横线和下划线')
-        if name in {'manager', 'internal'}:
-            raise ValueError('连接名称不能使用保留名称 manager/internal')

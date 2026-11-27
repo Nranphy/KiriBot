@@ -68,7 +68,7 @@ def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
     )
     gateway_config = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "napcat-1": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
@@ -94,7 +94,7 @@ def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
 async def test_manager_starts_instance_with_gateway_environment(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
 
-    status = await service.start("echo-instance")
+    status = await service.start_instance("echo-instance")
 
     assert status.running
     assert status.pid == 31415
@@ -114,20 +114,20 @@ async def test_manager_starts_instance_with_gateway_environment(tmp_path: Path) 
     )
 
     with pytest.raises(InstanceAlreadyRunningError):
-        await service.start("echo-instance")
+        await service.start_instance("echo-instance")
 
-    stopped = await service.stop("echo-instance")
+    stopped = await service.stop_instance("echo-instance")
     assert not stopped.running
     process_client.stop_mock.assert_awaited_once()
 
     with pytest.raises(InstanceNotRunningError):
-        await service.stop("echo-instance")
+        await service.stop_instance("echo-instance")
 
 
 @pytest.mark.asyncio
 async def test_close_stops_managed_instances(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
-    await service.start("echo-instance")
+    await service.start_instance("echo-instance")
 
     await service.close()
 
@@ -138,11 +138,11 @@ async def test_close_stops_managed_instances(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_stopping_exited_instance_clears_credentials(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
-    await service.start("echo-instance")
+    await service.start_instance("echo-instance")
     process = cast(FakeProcess, process_client.start_mock.return_value)
     process.returncode = 1
     with pytest.raises(InstanceNotRunningError):
-        await service.stop("echo-instance")
+        await service.stop_instance("echo-instance")
     assert "echo-instance" not in service._tokens
     process_client.stop_mock.assert_not_awaited()
 
@@ -150,9 +150,9 @@ async def test_stopping_exited_instance_clears_credentials(tmp_path: Path) -> No
 @pytest.mark.asyncio
 async def test_restart_running_instance(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
-    await service.start("echo-instance")
+    await service.start_instance("echo-instance")
 
-    status = await service.restart("echo-instance")
+    status = await service.restart_instance("echo-instance")
 
     assert status.running
     assert process_client.start_mock.await_count == 2
@@ -164,7 +164,7 @@ async def test_restart_rejects_stopped_instance(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
 
     with pytest.raises(InstanceNotRunningError):
-        await service.restart("echo-instance")
+        await service.restart_instance("echo-instance")
 
     process_client.start_mock.assert_not_awaited()
     process_client.stop_mock.assert_not_awaited()
@@ -174,7 +174,7 @@ def test_instance_management_routes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    monkeypatch.setattr("kiribot.controller.lifespan.check_playwright", AsyncMock())
     monkeypatch.setenv(
         "KIRIBOT_GATEWAY_CONFIG_PATH", str(tmp_path / "missing-gateway.json")
     )
@@ -185,8 +185,8 @@ def test_instance_management_routes(
     with TestClient(
         create_app(), headers={"Authorization": "Bearer test-admin-token"}
     ) as client:
-        assert client.get("/instances").json() == []
-        response = client.post("/instances/missing/start")
+        assert client.post("/instances/list").json() == []
+        response = client.post("/instances/start", json={"instance_id": "missing"})
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Instance 不存在"}
@@ -196,7 +196,7 @@ def test_instance_status_and_lifecycle_routes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    monkeypatch.setattr("kiribot.controller.lifespan.check_playwright", AsyncMock())
     service, process_client = create_service(tmp_path)
     app = create_app()
     app.dependency_overrides[get_instance_service] = lambda: service
@@ -204,11 +204,13 @@ def test_instance_status_and_lifecycle_routes(
     with TestClient(
         app, headers={"Authorization": "Bearer test-admin-token"}
     ) as client:
-        stopped = client.get("/instances/echo-instance")
-        started = client.post("/instances/echo-instance/start")
-        restarted = client.post("/instances/echo-instance/restart")
-        stopped_again = client.post("/instances/echo-instance/stop")
-        restart_stopped = client.post("/instances/echo-instance/restart")
+        body = {"instance_id": "echo-instance"}
+        assert client.post("/instances/status", params=body).status_code == 422
+        stopped = client.post("/instances/status", json=body)
+        started = client.post("/instances/start", json=body)
+        restarted = client.post("/instances/restart", json=body)
+        stopped_again = client.post("/instances/stop", json=body)
+        restart_stopped = client.post("/instances/restart", json=body)
 
     assert stopped.status_code == 200
     assert not stopped.json()["running"]

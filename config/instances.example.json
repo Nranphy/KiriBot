@@ -2,9 +2,8 @@
   "instances": {
     "default": {
       "name": "默认实例",
-      "implementation": "nonebot2",
       "command": ["uv", "run", "--locked", "python", "src/main.py"],
-      "connection": "napcat-1",
+      "connection": "napcat",
       "auto_start": true
     }
   }

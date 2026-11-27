@@ -23,7 +23,7 @@ async def test_manager_uses_standard_internal_connection(
     config.write_text(
         json.dumps(
             {
-                "connections": {
+                "external": {
                     "napcat-1": {
                         "protocol": "onebot_v11",
                         "mode": "reverse",
@@ -43,7 +43,7 @@ async def test_manager_uses_standard_internal_connection(
             }
         )
     )
-    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    monkeypatch.setattr("kiribot.controller.lifespan.check_playwright", AsyncMock())
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]

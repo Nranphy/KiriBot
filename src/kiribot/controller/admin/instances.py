@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException
 from nonebot.params import Depends as NoneBotDepends
 from nonebot_plugin_alconna import (
     Alconna,
@@ -13,8 +13,8 @@ from nonebot_plugin_alconna import (
     UniMessage,
     on_alconna,
 )
+from pydantic import BaseModel, ConfigDict, Field
 
-from kiribot.controller.admin import router
 from kiribot.controller.admin.dependencies import depend_superadmin
 from kiribot.models.instances import InstanceStatus
 from kiribot.services.instances import (
@@ -25,58 +25,68 @@ from kiribot.services.instances import (
     get_instance_service,
 )
 
+router = APIRouter()
 
-@router.get('/instances', response_model=list[InstanceStatus])
+
+class InstanceRequest(BaseModel):
+    """按 ID 定位待操作的 Instance"""
+
+    model_config = ConfigDict(extra='forbid')
+
+    instance_id: str = Field(min_length=1)
+
+
+@router.post('/instances/list', response_model=list[InstanceStatus])
 async def list_instances(
     service: Annotated[InstanceService, Depends(get_instance_service)],
 ) -> list[InstanceStatus]:
     return service.list()
 
 
-@router.get('/instances/{instance_id}', response_model=InstanceStatus)
+@router.post('/instances/status', response_model=InstanceStatus)
 async def get_instance_status(
-    instance_id: Annotated[str, Path(min_length=1)],
+    request: InstanceRequest,
     service: Annotated[InstanceService, Depends(get_instance_service)],
 ) -> InstanceStatus:
     try:
-        return service.get(instance_id)
+        return service.get(request.instance_id)
     except InstanceNotFoundError as error:
         raise HTTPException(status_code=404, detail='Instance 不存在') from error
 
 
-@router.post('/instances/{instance_id}/start', response_model=InstanceStatus)
+@router.post('/instances/start', response_model=InstanceStatus)
 async def start_instance(
-    instance_id: Annotated[str, Path(min_length=1)],
+    request: InstanceRequest,
     service: Annotated[InstanceService, Depends(get_instance_service)],
 ) -> InstanceStatus:
     try:
-        return await service.start(instance_id)
+        return await service.start_instance(request.instance_id)
     except InstanceNotFoundError as error:
         raise HTTPException(status_code=404, detail='Instance 不存在') from error
     except InstanceAlreadyRunningError as error:
         raise HTTPException(status_code=409, detail='Instance 已经运行') from error
 
 
-@router.post('/instances/{instance_id}/stop', response_model=InstanceStatus)
+@router.post('/instances/stop', response_model=InstanceStatus)
 async def stop_instance(
-    instance_id: Annotated[str, Path(min_length=1)],
+    request: InstanceRequest,
     service: Annotated[InstanceService, Depends(get_instance_service)],
 ) -> InstanceStatus:
     try:
-        return await service.stop(instance_id)
+        return await service.stop_instance(request.instance_id)
     except InstanceNotFoundError as error:
         raise HTTPException(status_code=404, detail='Instance 不存在') from error
     except InstanceNotRunningError as error:
         raise HTTPException(status_code=409, detail='Instance 未运行') from error
 
 
-@router.post('/instances/{instance_id}/restart', response_model=InstanceStatus)
+@router.post('/instances/restart', response_model=InstanceStatus)
 async def restart_instance(
-    instance_id: Annotated[str, Path(min_length=1)],
+    request: InstanceRequest,
     service: Annotated[InstanceService, Depends(get_instance_service)],
 ) -> InstanceStatus:
     try:
-        return await service.restart(instance_id)
+        return await service.restart_instance(request.instance_id)
     except InstanceNotFoundError as error:
         raise HTTPException(status_code=404, detail='Instance 不存在') from error
     except InstanceNotRunningError as error:
@@ -165,9 +175,9 @@ async def _change_instance(
 ) -> None:
     service = get_instance_service()
     operation = {
-        'start': service.start,
-        'stop': service.stop,
-        'restart': service.restart,
+        'start': service.start_instance,
+        'stop': service.stop_instance,
+        'restart': service.restart_instance,
     }[action]
     try:
         status = await operation(instance_id)

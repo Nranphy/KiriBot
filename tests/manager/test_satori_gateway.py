@@ -20,7 +20,7 @@ from kiribot.services.gateway.satori.session import SatoriExternalSession
 def create_client(online: bool = True) -> tuple[TestClient, GatewayService]:
     config = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "chronocat": {
                     "protocol": "satori",
                     "platform": "qq",
@@ -121,7 +121,7 @@ def test_satori_config_rejects_invalid_service_url(url: str) -> None:
     with pytest.raises(ValidationError):
         GatewayConfig.model_validate(
             {
-                "connections": {
+                "external": {
                     "chronocat": {
                         "protocol": "satori",
                         "platform": "qq",

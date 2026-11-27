@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from kiribot.clients.process import ProcessClient
+from kiribot.infra.network import gateway_url_host
 from kiribot.models.gateway import GatewayConfig
 from kiribot.models.instances import (
     InstancesConfig,
@@ -47,7 +48,7 @@ class InstanceService:
         self.config = config
         self.gateway_config = gateway_config
         self.gateway_token = gateway_token
-        self.gateway_host = self._normalize_host(gateway_host)
+        self.gateway_host = gateway_url_host(gateway_host)
         self.gateway_port = gateway_port
         self.process_client = process_client or ProcessClient()
         self._port_allocator = port_allocator or self._allocate_port
@@ -98,33 +99,32 @@ class InstanceService:
         return InstanceStatus(
             instance_id=instance_id,
             name=instance.name,
-            implementation=instance.implementation,
             connection=instance.connection,
             running=running,
             pid=process.pid if process is not None and running else None,
         )
 
-    async def start(self, instance_id: str) -> InstanceStatus:
+    async def start_instance(self, instance_id: str) -> InstanceStatus:
         """由 Manager 启动 Instance 并注入 Gateway 连接环境变量"""
         async with self._lock:
             return await self._start_unlocked(instance_id)
 
-    async def stop(self, instance_id: str) -> InstanceStatus:
+    async def stop_instance(self, instance_id: str) -> InstanceStatus:
         """停止一个由当前 Manager 启动的 Instance"""
         async with self._lock:
             return await self._stop_unlocked(instance_id)
 
-    async def restart(self, instance_id: str) -> InstanceStatus:
+    async def restart_instance(self, instance_id: str) -> InstanceStatus:
         """停止并重新启动一个正在运行的 Instance"""
         async with self._lock:
             await self._stop_unlocked(instance_id)
             return await self._start_unlocked(instance_id)
 
-    async def start_auto_instances(self) -> None:
+    async def start(self) -> None:
         """启动配置为随 Manager 启动的 Instance"""
         for instance_id, instance in self.config.instances.items():
             if instance.auto_start:
-                await self.start(instance_id)
+                await self.start_instance(instance_id)
 
     async def close(self) -> None:
         """停止全部仍在运行的 Instance"""
@@ -185,7 +185,7 @@ class InstanceService:
 
     def _validate_config(self) -> None:
         for instance_id, instance in self.config.instances.items():
-            connection = self.gateway_config.connections.get(instance.connection)
+            connection = self.gateway_config.external.get(instance.connection)
             if connection is None:
                 raise InvalidInstanceConfigError(
                     f'Instance {instance_id} 引用了不存在的 Gateway 连接 {instance.connection}'
@@ -212,16 +212,6 @@ class InstanceService:
             f'ws://{self.gateway_host}:{self.gateway_port}/gateway/internal/'
             f'{instance_id}/{instance.connection}/onebot/v11/ws'
         )
-
-    @staticmethod
-    def _normalize_host(host: str) -> str:
-        if host == '0.0.0.0':
-            return '127.0.0.1'
-        if host == '::':
-            return '[::1]'
-        if ':' in host:
-            return f'[{host}]'
-        return host
 
     @staticmethod
     def _allocate_port() -> int:

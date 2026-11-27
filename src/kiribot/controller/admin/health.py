@@ -2,12 +2,14 @@
 
 from typing import Literal
 
+from fastapi import APIRouter
 from nonebot.params import Depends
 from nonebot_plugin_alconna import Alconna, UniMessage, on_alconna
 from pydantic import BaseModel
 
-from kiribot.controller.admin import router
 from kiribot.controller.admin.dependencies import depend_superadmin
+
+router = APIRouter()
 
 
 class HealthResponse(BaseModel):

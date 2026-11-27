@@ -1,8 +1,9 @@
 {
-  "connections": {
-    "napcat-1": {
+  "external": {
+    "napcat": {
       "protocol": "onebot_v11",
-      "mode": "reverse"
+      "mode": "reverse",
+      "platform": "qq"
     }
   }
 }

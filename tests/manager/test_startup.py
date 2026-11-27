@@ -32,7 +32,7 @@ def test_database_url_can_be_configured(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_health_and_only_route(monkeypatch: pytest.MonkeyPatch) -> None:
     check = AsyncMock()
-    monkeypatch.setattr("kiribot.controller.app.check_playwright", check)
+    monkeypatch.setattr("kiribot.controller.lifespan.check_playwright", check)
     app = create_app()
     with TestClient(
         app, headers={"Authorization": "Bearer test-admin-token"}
@@ -47,7 +47,7 @@ def test_health_and_only_route(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_browser_failure_blocks_startup(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "kiribot.controller.app.check_playwright",
+        "kiribot.controller.lifespan.check_playwright",
         AsyncMock(side_effect=RuntimeError("browser unavailable")),
     )
     with (
@@ -60,11 +60,11 @@ def test_browser_failure_blocks_startup(monkeypatch: pytest.MonkeyPatch) -> None
 def test_database_failure_blocks_startup_and_releases_resources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("kiribot.controller.app.check_playwright", AsyncMock())
+    monkeypatch.setattr("kiribot.controller.lifespan.check_playwright", AsyncMock())
     database = AsyncMock()
     database.start.side_effect = RuntimeError("database unavailable")
     monkeypatch.setattr(
-        "kiribot.controller.app.get_database_client",
+        "kiribot.controller.lifespan.get_database_client",
         lambda: database,
     )
     gateway = get_gateway_service()

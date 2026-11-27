@@ -81,29 +81,32 @@ def test_permission_management_routes(
 
     group_id = asyncio.run(prepare())
     service = PermissionService(database)
-    monkeypatch.setattr('kiribot.controller.app.check_playwright', AsyncMock())
+    monkeypatch.setattr('kiribot.controller.lifespan.check_playwright', AsyncMock())
     app = create_app()
     app.dependency_overrides[get_permission_service] = lambda: service
     try:
         with TestClient(
             app, headers={"Authorization": "Bearer test-admin-token"}
         ) as client:
-            initial = client.get('/permissions/qq/10001')
-            granted = client.put(
-                '/permissions/qq/10001/ADMIN',
+            identity = {'platform': 'qq', 'open_user_id': '10001'}
+            permission = {**identity, 'permission_type': 'ADMIN'}
+            initial = client.post('/permissions/list', json=identity)
+            granted = client.post(
+                '/permissions/grant',
                 json={
+                    **permission,
                     'group_ids': [group_id],
                     'expired_at': '2027-01-01T00:00:00+08:00',
                 },
             )
-            listed = client.get('/permissions/qq/10001')
-            invalid_time = client.put(
-                '/permissions/qq/10001/ADMIN',
-                json={'expired_at': '2027-01-01T00:00:00'},
+            listed = client.post('/permissions/list', json=identity)
+            invalid_time = client.post(
+                '/permissions/grant',
+                json={**permission, 'expired_at': '2027-01-01T00:00:00'},
             )
-            revoked = client.delete('/permissions/qq/10001/ADMIN')
-            missing_record = client.delete('/permissions/qq/10001/ADMIN')
-            missing_user = client.get('/permissions/qq/unknown')
+            revoked = client.post('/permissions/revoke', json=permission)
+            missing_record = client.post('/permissions/revoke', json=permission)
+            missing_user = client.post('/permissions/list', json={**identity, 'open_user_id': 'unknown'})
     finally:
         asyncio.run(database.close())
 

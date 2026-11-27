@@ -38,7 +38,7 @@ class SatoriGateway:
         self.registry = registry
         self.config = config
         self.internal_token = internal_token
-        platforms = {name: config.platform for name, config in config.connections.items()}
+        platforms = {name: config.platform for name, config in config.external.items()}
         self.router = SatoriRouter(registry, observation_sink, platforms)
         self.api = SatoriApiClient(timeout)
         self.tasks: dict[str, asyncio.Task[None]] = {}
@@ -48,7 +48,7 @@ class SatoriGateway:
         if self.started:
             return
         self.started = True
-        for name, config in self.config.connections.items():
+        for name, config in self.config.external.items():
             if isinstance(config, SatoriForwardConfig):
                 connection = SatoriExternalSession(name, self.events_url(str(config.url)), config.token)
                 self.tasks[name] = asyncio.create_task(self._run_external(connection))
@@ -160,7 +160,7 @@ class SatoriGateway:
     ) -> ProxyResponse:
         if not self._authorized(headers):
             return ProxyResponse(401, {})
-        config = self.config.connections.get(connection_name)
+        config = self.config.external.get(connection_name)
         external = self.registry.get_external(connection_name, GatewayProtocol.SATORI)
         if not isinstance(config, SatoriForwardConfig) or external is None:
             return ProxyResponse(503, {})

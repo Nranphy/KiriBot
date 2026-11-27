@@ -95,7 +95,7 @@ async def test_gateway_submits_observation_without_changing_event() -> None:
     collector = ObservationCollector()
     config = GatewayConfig.model_validate(
         {
-            "connections": {
+            "external": {
                 "napcat": {
                     "protocol": "onebot_v11",
                     "mode": "reverse",
