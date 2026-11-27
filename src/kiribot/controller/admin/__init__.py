@@ -1,5 +1,7 @@
 """管理 Controller 的共享路由与初始化入口"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-router = APIRouter()
+from kiribot.controller.auth import require_admin_token
+
+router = APIRouter(dependencies=[Depends(require_admin_token)])

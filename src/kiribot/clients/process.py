@@ -8,6 +8,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 
+def _build_worker_environment() -> dict[str, str]:
+    """复制 Worker 可继承的环境变量并移除管理凭据"""
+    environment = os.environ.copy()
+    environment.pop("KIRIBOT_ADMIN_TOKEN", None)
+    return environment
+
+
 class ProcessClient:
     """创建和终止由 Manager 持有的子进程"""
 
@@ -17,7 +24,7 @@ class ProcessClient:
         working_directory: Path,
         environment: Mapping[str, str],
     ) -> asyncio.subprocess.Process:
-        child_environment = os.environ.copy()
+        child_environment = _build_worker_environment()
         child_environment.update(environment)
         if os.name == 'nt':
             return await asyncio.create_subprocess_exec(

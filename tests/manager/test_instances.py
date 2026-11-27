@@ -163,7 +163,9 @@ def test_instance_management_routes(
         "KIRIBOT_INSTANCES_CONFIG_PATH", str(tmp_path / "missing-instances.json")
     )
 
-    with TestClient(create_app()) as client:
+    with TestClient(
+        create_app(), headers={"Authorization": "Bearer test-admin-token"}
+    ) as client:
         assert client.get("/instances").json() == []
         response = client.post("/instances/missing/start")
 
@@ -180,7 +182,9 @@ def test_instance_status_and_lifecycle_routes(
     app = create_app()
     app.dependency_overrides[get_instance_service] = lambda: service
 
-    with TestClient(app) as client:
+    with TestClient(
+        app, headers={"Authorization": "Bearer test-admin-token"}
+    ) as client:
         stopped = client.get("/instances/echo-worker")
         started = client.post("/instances/echo-worker/start")
         restarted = client.post("/instances/echo-worker/restart")

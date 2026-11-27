@@ -34,7 +34,9 @@ def test_health_and_only_route(monkeypatch: pytest.MonkeyPatch) -> None:
     check = AsyncMock()
     monkeypatch.setattr("kiribot.controller.app.check_playwright", check)
     app = create_app()
-    with TestClient(app) as client:
+    with TestClient(
+        app, headers={"Authorization": "Bearer test-admin-token"}
+    ) as client:
         assert client.get("/health").json() == {
             "status": "ok",
         }

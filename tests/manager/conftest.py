@@ -28,6 +28,7 @@ def reset_nonebot_driver(
     get_permission_service.cache_clear()
     get_database_client.cache_clear()
     get_settings.cache_clear()
+    monkeypatch.setenv("KIRIBOT_ADMIN_TOKEN", "test-admin-token")
     monkeypatch.setenv(
         "KIRIBOT_GATEWAY_CONFIG_PATH",
         str(tmp_path / "missing-gateway.json"),

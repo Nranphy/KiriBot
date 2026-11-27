@@ -85,7 +85,9 @@ def test_permission_management_routes(
     app = create_app()
     app.dependency_overrides[get_permission_service] = lambda: service
     try:
-        with TestClient(app) as client:
+        with TestClient(
+            app, headers={"Authorization": "Bearer test-admin-token"}
+        ) as client:
             initial = client.get('/permissions/qq/10001')
             granted = client.put(
                 '/permissions/qq/10001/ADMIN',

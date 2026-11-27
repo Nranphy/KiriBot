@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     permissions_config_path: Path = Path('config/permissions.json')
     """权限 JSON 配置路径，相对路径基于工作目录"""
 
+    admin_token: str = Field(default="", repr=False)
+    """管理接口 Bearer Token，留空时禁用管理 API"""
+
 
 @lru_cache
 def get_settings() -> Settings:
