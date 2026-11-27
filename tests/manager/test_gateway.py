@@ -77,10 +77,10 @@ def test_ready_event_and_echo_routing() -> None:
         with (
             client.websocket_connect(external("napcat-1"), headers=HEADERS) as upstream,
             client.websocket_connect(internal("manager"), headers=headers) as manager,
-            client.websocket_connect(internal("worker"), headers=headers) as worker,
+            client.websocket_connect(internal("instance"), headers=headers) as instance,
         ):
             assert manager.receive_json()["sub_type"] == "connect"
-            assert worker.receive_json()["sub_type"] == "connect"
+            assert instance.receive_json()["sub_type"] == "connect"
             event = {
                 "post_type": "message",
                 "self_id": 10001,
@@ -88,19 +88,19 @@ def test_ready_event_and_echo_routing() -> None:
             }
             upstream.send_json(event)
             assert manager.receive_json() == event
-            assert worker.receive_json() == event
+            assert instance.receive_json() == event
             manager.send_json({"action": "get_status", "echo": "same"})
             first = upstream.receive_json()
-            worker.send_json({"action": "get_status", "echo": "same"})
+            instance.send_json({"action": "get_status", "echo": "same"})
             second = upstream.receive_json()
             assert first["echo"] != second["echo"]
             upstream.send_json(
-                {"status": "ok", "data": "worker", "echo": second["echo"]}
+                {"status": "ok", "data": "instance", "echo": second["echo"]}
             )
             upstream.send_json(
                 {"status": "ok", "data": "manager", "echo": first["echo"]}
             )
-            assert worker.receive_json()["data"] == "worker"
+            assert instance.receive_json()["data"] == "instance"
             assert manager.receive_json()["data"] == "manager"
 
 
@@ -109,7 +109,7 @@ def test_internal_requires_external_and_duplicate_external_is_rejected() -> None
         headers = internal_headers(client)
         with (
             pytest.raises(WebSocketDisconnect),
-            client.websocket_connect(internal("worker"), headers=headers),
+            client.websocket_connect(internal("instance"), headers=headers),
         ):
             pass
         with client.websocket_connect(external("napcat-1"), headers=HEADERS):

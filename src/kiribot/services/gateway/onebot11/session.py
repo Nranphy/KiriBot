@@ -83,7 +83,7 @@ class OneBot11ReverseSession(ReverseConnection):
 
 
 class OneBot11InternalSession(OneBot11ReverseSession):
-    """Manager 或 Worker 的内部 OneBot 会话"""
+    """Manager 或 Instance 的内部 OneBot 会话"""
 
     async def handshake(self) -> None:
         await self.send(lifecycle(self.self_id))

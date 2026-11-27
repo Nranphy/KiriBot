@@ -74,11 +74,11 @@ async def test_event_broadcast_is_non_blocking_and_isolated() -> None:
     ready.ready = True
     other = AsyncMock()
     other.ready = True
-    first_key = SubscriberKey("chronocat", "worker")
-    other_key = SubscriberKey("other", "worker")
+    first_key = SubscriberKey("chronocat", "instance")
+    other_key = SubscriberKey("other", "instance")
     gateway.registry.subscribers = {
-        first_key: Subscriber("chronocat", "worker", GatewayProtocol.SATORI, ready),
-        other_key: Subscriber("other", "worker", GatewayProtocol.SATORI, other),
+        first_key: Subscriber("chronocat", "instance", GatewayProtocol.SATORI, ready),
+        other_key: Subscriber("other", "instance", GatewayProtocol.SATORI, other),
     }
     payload = {"op": 0, "body": {"sn": 1, "type": "message-created"}}
     await gateway.satori.router.route("chronocat", payload)

@@ -1,10 +1,9 @@
 {
   "instances": {
-    "worker": {
-      "name": "默认 Worker",
+    "default": {
+      "name": "默认实例",
       "implementation": "nonebot2",
-      "working_directory": "workers/nonebot2",
-      "command": ["uv", "run", "--locked", "python", "-m", "kiribot_worker"],
+      "command": ["uv", "run", "--locked", "python", "src/main.py"],
       "connection": "napcat-1",
       "auto_start": true
     }

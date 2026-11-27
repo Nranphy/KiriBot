@@ -238,9 +238,9 @@ wheels = [
 ]
 
 [[package]]
-name = "kiribot-worker-nonebot2"
+name = "kiribot-nonebot2-template"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "nonebot-adapter-onebot" },
     { name = "nonebot-plugin-alconna" },

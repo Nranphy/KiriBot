@@ -1,4 +1,4 @@
-"""管理接口凭据校验，与 Gateway 和 Worker 凭据分离"""
+"""管理接口凭据校验，与 Gateway 和 Instance 凭据分离"""
 
 import secrets
 from typing import Annotated

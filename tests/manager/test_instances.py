@@ -47,14 +47,19 @@ class FakeProcessClient(ProcessClient):
         await self.stop_mock(process, timeout)
 
 
+@pytest.fixture(autouse=True)
+def instance_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+
 def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
+    (tmp_path / "instances" / "echo-instance").mkdir(parents=True)
     config = InstancesConfig.model_validate(
         {
             "instances": {
-                "echo-worker": {
-                    "name": "Echo Worker",
-                    "working_directory": str(tmp_path),
-                    "command": ["uv", "run", "python", "-m", "kiribot_worker"],
+                "echo-instance": {
+                    "name": "Echo Instance",
+                    "command": ["uv", "run", "python", "src/main.py"],
                     "connection": "napcat-1",
                     "auto_start": False,
                 }
@@ -86,54 +91,68 @@ def create_service(tmp_path: Path) -> tuple[InstanceService, FakeProcessClient]:
 
 
 @pytest.mark.asyncio
-async def test_manager_starts_worker_with_gateway_environment(tmp_path: Path) -> None:
+async def test_manager_starts_instance_with_gateway_environment(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
 
-    status = await service.start("echo-worker")
+    status = await service.start("echo-instance")
 
     assert status.running
     assert status.pid == 31415
     process_client.start_mock.assert_awaited_once_with(
-        ["uv", "run", "python", "-m", "kiribot_worker"],
-        tmp_path,
+        ["uv", "run", "python", "src/main.py"],
+        tmp_path / "instances" / "echo-instance",
         {
-            "KIRIBOT_WORKER_GATEWAY_URL": (
+            "KIRIBOT_INSTANCE_GATEWAY_URL": (
                 "ws://127.0.0.1:8000/gateway/internal/"
-                "echo-worker/napcat-1/onebot/v11/ws"
+                "echo-instance/napcat-1/onebot/v11/ws"
             ),
-            "KIRIBOT_WORKER_ACCESS_TOKEN": "runtime-secret",
-            "KIRIBOT_WORKER_PORT": "18080",
+            "KIRIBOT_INSTANCE_GATEWAY_TOKEN": "runtime-secret",
+            "KIRIBOT_INSTANCE_PORT": "18080",
+            "KIRIBOT_INSTANCE_MANAGER_URL": "http://127.0.0.1:8000",
+            "KIRIBOT_INSTANCE_MANAGER_TOKEN": service._tokens["echo-instance"],
         },
     )
 
     with pytest.raises(InstanceAlreadyRunningError):
-        await service.start("echo-worker")
+        await service.start("echo-instance")
 
-    stopped = await service.stop("echo-worker")
+    stopped = await service.stop("echo-instance")
     assert not stopped.running
     process_client.stop_mock.assert_awaited_once()
 
     with pytest.raises(InstanceNotRunningError):
-        await service.stop("echo-worker")
+        await service.stop("echo-instance")
 
 
 @pytest.mark.asyncio
-async def test_close_stops_managed_workers(tmp_path: Path) -> None:
+async def test_close_stops_managed_instances(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
-    await service.start("echo-worker")
+    await service.start("echo-instance")
 
     await service.close()
 
     process_client.stop_mock.assert_awaited_once()
-    assert not service.get("echo-worker").running
+    assert not service.get("echo-instance").running
 
 
 @pytest.mark.asyncio
-async def test_restart_running_worker(tmp_path: Path) -> None:
+async def test_stopping_exited_instance_clears_credentials(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
-    await service.start("echo-worker")
+    await service.start("echo-instance")
+    process = cast(FakeProcess, process_client.start_mock.return_value)
+    process.returncode = 1
+    with pytest.raises(InstanceNotRunningError):
+        await service.stop("echo-instance")
+    assert "echo-instance" not in service._tokens
+    process_client.stop_mock.assert_not_awaited()
 
-    status = await service.restart("echo-worker")
+
+@pytest.mark.asyncio
+async def test_restart_running_instance(tmp_path: Path) -> None:
+    service, process_client = create_service(tmp_path)
+    await service.start("echo-instance")
+
+    status = await service.restart("echo-instance")
 
     assert status.running
     assert process_client.start_mock.await_count == 2
@@ -141,11 +160,11 @@ async def test_restart_running_worker(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_restart_rejects_stopped_worker(tmp_path: Path) -> None:
+async def test_restart_rejects_stopped_instance(tmp_path: Path) -> None:
     service, process_client = create_service(tmp_path)
 
     with pytest.raises(InstanceNotRunningError):
-        await service.restart("echo-worker")
+        await service.restart("echo-instance")
 
     process_client.start_mock.assert_not_awaited()
     process_client.stop_mock.assert_not_awaited()
@@ -170,7 +189,7 @@ def test_instance_management_routes(
         response = client.post("/instances/missing/start")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Worker 实例不存在"}
+    assert response.json() == {"detail": "Instance 不存在"}
 
 
 def test_instance_status_and_lifecycle_routes(
@@ -185,11 +204,11 @@ def test_instance_status_and_lifecycle_routes(
     with TestClient(
         app, headers={"Authorization": "Bearer test-admin-token"}
     ) as client:
-        stopped = client.get("/instances/echo-worker")
-        started = client.post("/instances/echo-worker/start")
-        restarted = client.post("/instances/echo-worker/restart")
-        stopped_again = client.post("/instances/echo-worker/stop")
-        restart_stopped = client.post("/instances/echo-worker/restart")
+        stopped = client.get("/instances/echo-instance")
+        started = client.post("/instances/echo-instance/start")
+        restarted = client.post("/instances/echo-instance/restart")
+        stopped_again = client.post("/instances/echo-instance/stop")
+        restart_stopped = client.post("/instances/echo-instance/restart")
 
     assert stopped.status_code == 200
     assert not stopped.json()["running"]
@@ -197,5 +216,5 @@ def test_instance_status_and_lifecycle_routes(
     assert restarted.json()["running"]
     assert not stopped_again.json()["running"]
     assert restart_stopped.status_code == 409
-    assert restart_stopped.json() == {"detail": "Worker 实例未运行"}
+    assert restart_stopped.json() == {"detail": "Instance 未运行"}
     assert process_client.start_mock.await_count == 2

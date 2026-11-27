@@ -34,7 +34,7 @@ async def test_registry_rejects_protocol_mismatch_and_disconnects_subscribers() 
     registry.mark_external_ready("source", GatewayProtocol.SATORI)
     internal = AsyncMock()
     internal.ready = True
-    subscriber = Subscriber("source", "worker", GatewayProtocol.ONEBOT_V11, internal)
+    subscriber = Subscriber("source", "instance", GatewayProtocol.ONEBOT_V11, internal)
     with pytest.raises(ConnectionError):
         registry.register_subscriber(subscriber)
     subscriber.protocol = GatewayProtocol.SATORI

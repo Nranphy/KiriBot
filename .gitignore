@@ -40,3 +40,6 @@ Thumbs.db
 
 # 本地临时文件
 /temp/
+
+# 本地部署的 Instance
+/instances/

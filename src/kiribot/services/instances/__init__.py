@@ -1,4 +1,4 @@
-"""Worker 实例管理服务"""
+"""Instance 管理服务"""
 
 from functools import lru_cache
 
@@ -15,7 +15,7 @@ from kiribot.services.instances.service import (
 
 @lru_cache
 def get_instance_service() -> InstanceService:
-    """按 Manager 与 Gateway 配置创建进程内共享的实例服务"""
+    """按 Manager 与 Gateway 配置创建进程内共享的 Instance 服务"""
     settings = get_settings()
     gateway = get_gateway_service()
     return InstanceService.from_config_file(

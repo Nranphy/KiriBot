@@ -12,6 +12,7 @@ from nonebot.adapters.satori import Adapter as SatoriAdapter
 from kiribot.clients.database import get_database_client
 from kiribot.controller.admin import router as admin_router
 from kiribot.controller.gateway import router as gateway_router
+from kiribot.controller.internal import router as internal_router
 from kiribot.controller.loader import load_controllers
 from kiribot.infra.config import Settings, get_settings
 from kiribot.infra.log import configure_logging
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     load_controllers()
     app = initialize_fastapi(settings, bot_app, gateway, instances, user_recorder)
     app.include_router(admin_router)
+    app.include_router(internal_router)
     app.include_router(gateway_router)
     app.mount('/manager', bot_app)
     return app
